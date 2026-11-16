@@ -152,10 +152,12 @@ namespace SceneryEditorX::XPlane
 		 * the pack's own art (its orthophotos and pavement polygons) must cover their editing tint.
 		 * Nothing sits at 0: that is the terrain's own surface, and the g-buffer pass tests drapes against the terrain's
 		 * depth, so a drape in the terrain's plane is left to rounding and the terrain covers stretches of it (the boundary
-		 * until 0.2.101.602). A millimeter is about ten times the rounding of positions a kilometer out.
+		 * until 0.2.107.608). A millimeter is about ten times the rounding of positions a kilometer out, at any viewing
+		 * angle: a lift and that rounding both move the depth along the view ray by the same 1 / sin(grazing angle).
 		 */
 		constexpr float HEIGHT_BOUNDARY = 0.001f;
 		constexpr float HEIGHT_TRANSPARENT = 0.002f;
+		constexpr float HEIGHT_WATER_RUNWAY = 0.005f;
 		static_assert(HEIGHT_BOUNDARY > 0.0f && HEIGHT_TRANSPARENT - 0.0005f > HEIGHT_BOUNDARY, "Drapes sit above the terrain, the boundary lowest");
 		constexpr float HEIGHT_PAVEMENT = 0.03f;
 		constexpr float HEIGHT_RUNWAY_ABOVE_PAVEMENT = 0.02f;
@@ -879,7 +881,7 @@ namespace SceneryEditorX::XPlane
 				Part &part = start_part(AirportElementKind::WaterRunway, static_cast<uint32_t>(i), "Water runway " + runway.GetName(), Paint::Water);
 				Point2 corners[4];
 				GetWaterRunwayCorners(runway, projection, corners);
-				EmitQuad(part, corners, HEIGHT_BOUNDARY + 0.005f);
+				EmitQuad(part, corners, HEIGHT_WATER_RUNWAY);
 			}
 
 			for (size_t i = 0; i < airport.helipads.size(); ++i)
