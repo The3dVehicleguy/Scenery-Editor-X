@@ -1622,6 +1622,26 @@ TEST_CASE("Crossing runways: the more important runway goes on through the inter
 		CHECK_FALSE(CutOutConvex(untouched, { { 10.0, 0.0 }, { 20.0, 0.0 }, { 20.0, 10.0 }, { 10.0, 10.0 } }));	// Edge to edge
 		CHECK(untouched.indices == mesh.indices);
 
+		// Past a corner: within the cut's box and no edge of the cut separates them (only the triangle's own long side
+		// does), so it is kept whole, not split into pieces covering the same area
+		OverlayMesh corner;
+		const double past[3][2] = { { 2.2, 0.0 }, { 0.0, 2.2 }, { 2.2, 2.2 } };
+		for (const auto &point : past)
+		{
+			OverlayVertex vertex;
+			vertex.x = static_cast<float>(point[0]);
+			vertex.z = static_cast<float>(point[1]);
+			corner.vertices.push_back(vertex);
+		}
+		corner.indices = { 0, 1, 2 };
+		CHECK_FALSE(CutOutConvex(corner, { { 0.0, 0.0 }, { 1.0, 0.0 }, { 1.0, 1.0 }, { 0.0, 1.0 } }));
+		CHECK(corner.indices == std::vector<uint32_t>{ 0, 1, 2 });
+		CHECK(corner.vertices.size() == 3);
+		// ... while one reaching into it is cut
+		corner.vertices[1].x = 0.5f;
+		corner.vertices[1].z = 0.5f;
+		CHECK(CutOutConvex(corner, { { 0.0, 0.0 }, { 1.0, 0.0 }, { 1.0, 1.0 }, { 0.0, 1.0 } }));
+
 		OverlayMesh cut = mesh;
 		REQUIRE(CutOutConvex(cut, { { 4.0, -5.0 }, { 4.0, 15.0 }, { 6.0, 15.0 }, { 6.0, -5.0 } }));
 		CHECK(area(cut) == Catch::Approx(80.0).margin(1e-4));

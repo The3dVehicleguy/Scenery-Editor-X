@@ -979,27 +979,42 @@ namespace SceneryEditorX::XPlane
 					keep(index);
 				continue;
 			}
-			changed = true;
 			if (within)
+			{
+				changed = true;
 				continue;
+			}
 
 			// The pieces outside the cut: past each edge in turn, of what lies inside the edges before it
+			std::vector<std::vector<OverlayVertex>> pieces;
 			std::vector<OverlayVertex> remaining = { *triangle[0], *triangle[1], *triangle[2] };
 			for (size_t edge = 0; edge < corners && remaining.size() >= 3; ++edge)
 			{
-				const std::vector<OverlayVertex> piece = ClipToSide(remaining, [&](const OverlayVertex &vertex) { return -inside(edge, vertex.x, vertex.z); });
+				std::vector<OverlayVertex> piece = ClipToSide(remaining, [&](const OverlayVertex &vertex) { return -inside(edge, vertex.x, vertex.z); });
 				if (piece.size() >= 3 && PolygonArea(piece) >= CUT_MIN_AREA)
-				{
-					const uint32_t base = static_cast<uint32_t>(vertices.size());
-					vertices.insert(vertices.end(), piece.begin(), piece.end());
-					for (uint32_t i = 1; i + 1 < piece.size(); ++i)
-					{
-						indices.push_back(base);
-						indices.push_back(base + i);
-						indices.push_back(base + i + 1);
-					}
-				}
+					pieces.push_back(std::move(piece));
 				remaining = ClipToSide(remaining, [&](const OverlayVertex &vertex) { return inside(edge, vertex.x, vertex.z); });
+			}
+
+			// Nothing of it inside after all: a triangle no edge of the cut separates can still miss it (one of the
+			// triangle's own edges separates them), and is kept whole rather than split into pieces covering the same area
+			if (remaining.size() < 3 || PolygonArea(remaining) < CUT_MIN_AREA)
+			{
+				for (const uint32_t index : corner)
+					keep(index);
+				continue;
+			}
+			changed = true;
+			for (const std::vector<OverlayVertex> &piece : pieces)
+			{
+				const uint32_t base = static_cast<uint32_t>(vertices.size());
+				vertices.insert(vertices.end(), piece.begin(), piece.end());
+				for (uint32_t i = 1; i + 1 < piece.size(); ++i)
+				{
+					indices.push_back(base);
+					indices.push_back(base + i);
+					indices.push_back(base + i + 1);
+				}
 			}
 		}
 		if (!changed)
