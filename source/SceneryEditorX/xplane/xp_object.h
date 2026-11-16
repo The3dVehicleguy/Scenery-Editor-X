@@ -57,6 +57,12 @@ namespace SceneryEditorX::XPlane
 		uint32_t triangleCount = 0;
 		bool castShadow = true;
 		bool draped = false;
+
+		// ATTR_draped geometry of a static batch (node -1), in object space, kept on the CPU so that every placement can
+		// drape its own copy over the terrain (SceneObjects). Empty for all other batches (and for draped ones too large to
+		// drape per placement, which draw flat): their geometry lives in the global geometry buffer only.
+		std::vector<Vertex_PosTexNorTan> drapeVertices;
+		std::vector<uint32_t> drapeIndices;
 	};
 
 	/**

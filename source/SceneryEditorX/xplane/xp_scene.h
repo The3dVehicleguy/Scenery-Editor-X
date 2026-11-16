@@ -103,6 +103,9 @@ namespace SceneryEditorX::XPlane
 
 
 		bool logPlacement = true;				// Log placing and building it (off for the thousands an airport places)
+		// Placed in SceneTerrain's frame (PlaceOptions::onTerrain, SceneObjects::SetOnTerrain): its static ATTR_draped
+		// batches are draped over the terrain (Tick keeps that state in a component of its own on draped placements)
+		bool placedOnTerrain = true;
 
 		bool visible = true;
 		bool animate = true;					// Off: groups hold their last pose
@@ -131,6 +134,7 @@ namespace SceneryEditorX::XPlane
 			std::string virtualPath;		// Shown in the UI and kept with the placement
 			std::string name;				// Entity name; the file name when empty
 			bool frameCamera = true;		// Move the camera so the object fills the view (once it has loaded)
+			bool onTerrain = true;			// Placed in SceneTerrain's frame: its ATTR_draped geometry drapes over the terrain
 		};
 
 		/**
@@ -162,6 +166,13 @@ namespace SceneryEditorX::XPlane
 
 		/* @brief Moves the camera so a placed object fills the view (when it has loaded; the latest request wins). */
 		static void FrameObject(uint64_t rootId);
+
+		/**
+		 * @brief Whether a placement stands in SceneTerrain's frame (PlaceOptions::onTerrain), for when that changed (the
+		 * terrain came or went under a project): its static ATTR_draped batches are draped over the terrain again, or
+		 * drawn flat, with the next Tick().
+		 */
+		static void SetOnTerrain(uint64_t rootId, bool onTerrain);
 
 		/* @brief Number of placed objects in the active scene. */
 		static size_t GetObjectCount();

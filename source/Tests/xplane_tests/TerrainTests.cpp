@@ -16,6 +16,7 @@
 #include <SceneryEditorX/filesystem/vfs.h>
 #include <SceneryEditorX/xplane/xp_7z.h>
 #include <SceneryEditorX/xplane/xp_assets.h>
+#include <SceneryEditorX/xplane/xp_drape_schedule.h>
 #include <SceneryEditorX/xplane/xp_dsf.h>
 #include <SceneryEditorX/xplane/xp_library.h>
 #include <SceneryEditorX/xplane/xp_terrain.h>
@@ -838,6 +839,217 @@ TEST_CASE("The terrain surface: heights, rays and draping", "[terrain]")
 			}
 		}
 		CHECK_THAT(area, WithinAbs(50.0 * 20.0, 0.01));
+	}
+
+	SECTION("An object's draped geometry is placed, draped and brought back into object space")
+	{
+		// A 3 x 34 m parking bay in object space (like KPVD's space_single_wht_12x.obj), 1 cm up, u / v from the position
+		const auto bay = []
+		{
+			std::vector<OverlayVertex> vertices(4);
+			const float corners[4][2] = { { -1.5f, -17.0f }, { 1.5f, -17.0f }, { 1.5f, 17.0f }, { -1.5f, 17.0f } };
+			for (int i = 0; i < 4; ++i)
+			{
+				vertices[i].x = corners[i][0];
+				vertices[i].z = corners[i][1];
+				vertices[i].y = 0.01f;
+				vertices[i].u = vertices[i].x / 3.0f + 0.5f;
+				vertices[i].v = vertices[i].z / 34.0f + 0.5f;
+			}
+			return vertices;
+		};
+		// Turned 0.6 rad about +Y (row vectors: p' = p * axes + origin), across the crease, the object itself 123 m up (MSL
+		// placements stand anywhere): the drape still lies on the ground
+		const double c = std::cos(0.6), s = std::sin(0.6);
+		const double axes[3][3] = { { c, 0.0, -s }, { 0.0, 1.0, 0.0 }, { s, 0.0, c } };
+		const double origin[3] = { 50.0, 123.0, 50.0 };
+		const auto place = [&](const OverlayVertex &v, double out[3])
+		{
+			for (int j = 0; j < 3; ++j)
+				out[j] = v.x * axes[0][j] + v.y * axes[1][j] + v.z * axes[2][j] + origin[j];
+		};
+
+		std::vector<OverlayVertex> vertices = bay();
+		std::vector<uint32_t> indices = { 0, 2, 1, 0, 3, 2 };
+		REQUIRE(surface.DrapePlaced(vertices, indices, axes, origin));
+		CHECK(indices.size() / 3 > 2);	// Cut along the crease
+
+		double area = 0.0;
+		for (size_t i = 0; i + 2 < indices.size(); i += 3)
+		{
+			const OverlayVertex &a = vertices[indices[i]], &b = vertices[indices[i + 1]], &c3 = vertices[indices[i + 2]];
+			area += std::abs((b.x - a.x) * (c3.z - a.z) - (b.z - a.z) * (c3.x - a.x)) * 0.5;
+			// Every piece is flat on one terrain face: its middle, placed, is on the terrain too
+			OverlayVertex middle;
+			middle.x = (a.x + b.x + c3.x) / 3.0f;
+			middle.y = (a.y + b.y + c3.y) / 3.0f;
+			middle.z = (a.z + b.z + c3.z) / 3.0f;
+			double placed[3];
+			place(middle, placed);
+			CHECK_THAT(placed[1], WithinAbs(CreaseHeight(placed[0], placed[2]) + 0.01, 1e-3));
+		}
+		CHECK_THAT(area, WithinAbs(3.0 * 34.0, 0.01));	// In object space, so the heading is undone
+		for (const OverlayVertex &vertex : vertices)
+		{
+			double placed[3];
+			place(vertex, placed);
+			CHECK_THAT(placed[1], WithinAbs(CreaseHeight(placed[0], placed[2]) + 0.01, 1e-3));
+			CHECK_THAT(vertex.u, WithinAbs(vertex.x / 3.0 + 0.5, 1e-4));
+			CHECK_THAT(vertex.v, WithinAbs(vertex.z / 34.0 + 0.5, 1e-4));
+			CHECK(vertex.x >= -1.5f - 1e-3f);
+			CHECK(vertex.x <= 1.5f + 1e-3f);
+			CHECK(vertex.ny > 0.99f);
+		}
+
+		// Reaching off the terrain (x > 100): left as it was
+		std::vector<OverlayVertex> off = bay();
+		std::vector<uint32_t> offIndices = { 0, 2, 1, 0, 3, 2 };
+		const double edge[3] = { 99.0, 0.0, 50.0 };
+		CHECK_FALSE(surface.DrapePlaced(off, offIndices, axes, edge));
+		CHECK(offIndices.size() == 6);
+		CHECK(off[2].x == 1.5f);
+		CHECK(off[2].y == 0.01f);
+
+		// And nothing to drape on without terrain
+		TerrainSurface none;
+		CHECK_FALSE(none.DrapePlaced(off, offIndices, axes, origin));
+	}
+}
+
+TEST_CASE("Draped object geometry takes the terrain's normal under a non-uniform scale", "[terrain]")
+{
+	// A plane rising 10 cm per meter east, with its true normal on every vertex
+	TerrainMeshPart slope;
+	slope.definition = "test.ter";
+	const float length = std::sqrt(0.01f + 1.0f);
+	const float slopeNormal[3] = { -0.1f / length, 1.0f / length, 0.0f };
+	const auto vertex = [&](const float x, const float z)
+	{
+		TerrainVertex v;
+		v.x = x;
+		v.y = 0.1f * x;
+		v.z = z;
+		v.nx = slopeNormal[0];
+		v.ny = slopeNormal[1];
+		v.nz = slopeNormal[2];
+		return v;
+	};
+	slope.vertices = { vertex(0, 0), vertex(100, 0), vertex(100, 100), vertex(0, 100) };
+	slope.indices = { 0, 2, 1, 0, 3, 2 };
+	TerrainSurface surface;
+	surface.Build({ slope });
+
+	// Turned 0.6 rad and scaled 2 x 1 x 0.5 (row vectors: rows are the scaled axes)
+	const double c = std::cos(0.6), s = std::sin(0.6);
+	const double axes[3][3] = { { 2.0 * c, 0.0, -2.0 * s }, { 0.0, 1.0, 0.0 }, { 0.5 * s, 0.0, 0.5 * c } };
+	const double origin[3] = { 50.0, 7.0, 50.0 };
+	// Normals into the terrain's frame go through the inverse transpose: n * diag(1/2, 1, 2) * R
+	const auto normalToTerrain = [&](const OverlayVertex &v, double out[3])
+	{
+		const double a = v.nx / 2.0, b = v.ny, d = 2.0 * v.nz;
+		out[0] = a * c + d * s;
+		out[1] = b;
+		out[2] = -a * s + d * c;
+		const double n = std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+		for (int j = 0; j < 3; ++j)
+			out[j] /= n;
+	};
+
+	std::vector<OverlayVertex> vertices(4);
+	const float corners[4][2] = { { -1.5f, -4.0f }, { 1.5f, -4.0f }, { 1.5f, 4.0f }, { -1.5f, 4.0f } };
+	for (int i = 0; i < 4; ++i)
+	{
+		vertices[i].x = corners[i][0];
+		vertices[i].z = corners[i][1];
+		vertices[i].y = 0.01f;
+	}
+	std::vector<uint32_t> indices = { 0, 2, 1, 0, 3, 2 };
+	REQUIRE(surface.DrapePlaced(vertices, indices, axes, origin));
+
+	for (const OverlayVertex &v : vertices)
+	{
+		// On the slope, 1 cm up
+		double placed[3];
+		for (int j = 0; j < 3; ++j)
+			placed[j] = v.x * axes[0][j] + v.y * axes[1][j] + v.z * axes[2][j] + origin[j];
+		CHECK_THAT(placed[1], WithinAbs(0.1 * placed[0] + 0.01, 1e-3));
+		// Its normal, taken back into the terrain's frame, is the slope's
+		double n[3];
+		normalToTerrain(v, n);
+		CHECK_THAT(n[0], WithinAbs(slopeNormal[0], 1e-4));
+		CHECK_THAT(n[1], WithinAbs(slopeNormal[1], 1e-4));
+		CHECK_THAT(n[2], WithinAbs(slopeNormal[2], 1e-4));
+	}
+}
+
+TEST_CASE("Draped placements are draped once, when the terrain changes and when a move has settled", "[terrain]")
+{
+	const DrapeTransform at = { 10.0f, 2.0f, -5.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f };
+	const auto movedTo = [&](const float x)
+	{
+		DrapeTransform t = at;
+		t[0] = x;
+		return t;
+	};
+
+	DrapeSchedule schedule;
+	constexpr uint64_t terrain = 7;
+
+	SECTION("Every placement is checked once in CHECK_PHASES frames, whatever its id")
+	{
+		for (uint64_t id = 0; id < 40; ++id)
+		{
+			int checks = 0;
+			for (uint64_t frame = 100; frame < 100 + DrapeSchedule::CHECK_PHASES; ++frame)
+				checks += DrapeSchedule::IsCheckFrame(id, frame) ? 1 : 0;
+			CHECK(checks == 1);
+		}
+	}
+
+	SECTION("Draped once, then left alone")
+	{
+		CHECK(schedule.NeedsTransform(terrain, false));	// never draped: due on any frame
+		REQUIRE(schedule.Due(terrain, false, at));
+		schedule.Draped(terrain, at);
+		CHECK_FALSE(schedule.NeedsTransform(terrain, false));	// not a check frame: the transform isn't even read
+		CHECK_FALSE(schedule.Due(terrain, true, at));
+		CHECK_FALSE(schedule.Due(terrain, true, at));
+	}
+
+	SECTION("A dragged placement is draped again only once it stands still")
+	{
+		REQUIRE(schedule.Due(terrain, false, at));
+		schedule.Draped(terrain, at);
+		CHECK_FALSE(schedule.Due(terrain, true, at));
+
+		// Moving between checks: never settled
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(11.0f)));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(12.0f)));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(13.0f)));
+		// Frames between checks don't count
+		CHECK_FALSE(schedule.Due(terrain, false, movedTo(13.0f)));
+		// The same transform at two checks in a row: settled
+		REQUIRE(schedule.Due(terrain, true, movedTo(13.0f)));
+		schedule.Draped(terrain, movedTo(13.0f));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(13.0f)));
+
+		// Moved and back between two checks: nothing to do
+		CHECK_FALSE(schedule.Due(terrain, false, movedTo(20.0f)));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(13.0f)));
+	}
+
+	SECTION("The terrain changing, or whether the placement stands on it, drapes it again at once")
+	{
+		REQUIRE(schedule.Due(terrain, false, at));
+		schedule.Draped(terrain, at);
+		CHECK(schedule.NeedsTransform(terrain + 1, false));
+		REQUIRE(schedule.Due(terrain + 1, false, at));
+		schedule.Draped(terrain + 1, at);
+		CHECK_FALSE(schedule.Due(terrain + 1, true, at));
+
+		schedule.Invalidate();
+		CHECK(schedule.NeedsTransform(terrain + 1, false));
+		CHECK(schedule.Due(terrain + 1, false, at));
 	}
 }
 

@@ -164,6 +164,7 @@ public struct MaterialParameters
     public bool has_texture_roughness() { return (flags & (1 << 3)) != 0; }
     public bool has_texture_metalness() { return (flags & (1 << 4)) != 0; }
     public bool has_texture_emissive() { return (flags & (1 << 6)) != 0; }
+    public bool is_terrain() { return (flags & (1 << 8)) != 0; }	// its albedo alpha is no coverage (X-Plane .ter: the decal key)
     public bool emissive_from_albedo() { return (flags & (1 << 15)) != 0; }
     public uint xp_normal_mode() { return (flags >> 16) & 3u; }	// xp_material.slang xp_normal_*
     public bool is_xp_material() { return (flags & (1 << 18)) != 0; }
