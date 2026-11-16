@@ -61,7 +61,9 @@ The dependency-light, cross-platform Catch2 unit suites that only need `source/`
   into it, overlays read only from base meshes, sim/exclude_* zones as boxes and X-Plane 12 polygons), `.ter` terrain types
   (`xp_terrain.*`; every default `.ter` parses with its textures, tag `[library-sweep]`), library resolution by REGION bitmap
   and season (`xp_library.*` ResolveProvider), the terrain meshes in the local frame and the surface drapes are cut onto
-  (`xp_terrain_mesh.*`: heights, rays, exact draping across a crease, clipped at the terrain's edge; water meshes cut into
+  (`xp_terrain_mesh.*`: heights, rays, exact draping across a crease, clipped at the terrain's edge, an object's
+  `ATTR_draped` geometry draped through its placement and brought back into object space, normals under a non-uniform
+  scale; `xp_drape_schedule.h`: when a placement is draped again, once a move has settled; water meshes cut into
   64 m cells without T-junctions for tessellation, `CutTerrainAlongGrid`, and the floor's depth from X-Plane 12's depth
   ratio and the bathymetry, `WaterFloorDepth`, tag `[water]`); with an X-Plane 12
   install listed it reads KSEA's 7-zip Global Scenery tile and its scenery within a mile and the test airports' season

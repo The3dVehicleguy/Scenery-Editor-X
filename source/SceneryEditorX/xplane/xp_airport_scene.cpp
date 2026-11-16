@@ -2467,6 +2467,9 @@ namespace SceneryEditorX::XPlane
 		const float yaw = yawDegrees * kDegToRad;
 		const float pitch = pitchDegrees * kDegToRad;
 		PlaceCamera(eye, eye + ViewForward(yaw, pitch) * 100.0f, yaw, pitch);
+		// Views are given from the center; scenery positions are usually known from the datum (DSF dumps, apt.dat)
+		SEDX_CORE_INFO_TAG(LOG_TAG, "Viewing from {:.1f}, {:.1f}, {:.1f} m off the center, which is {:.1f}, {:.1f} m from the datum (local x east, z south)",
+			x, y, z, center.x, center.z);
 	}
 
 	bool SceneAirports::LookFromGeo(const double latitude, const double longitude, const float heightMeters, const float headingTrueDegrees, const float pitchDegrees)
