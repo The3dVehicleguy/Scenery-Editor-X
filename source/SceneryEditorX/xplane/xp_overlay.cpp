@@ -815,6 +815,11 @@ namespace SceneryEditorX::XPlane
 		constexpr double CUT_EPSILON = 1.0e-6;			// Meters: a vertex this close to a cutting edge lies on it
 		constexpr double CUT_MIN_AREA = 1.0e-8;			// Square meters: cut pieces smaller than this are slivers, dropped
 
+		/**
+		 * @brief A point along an edge, every attribute interpolated linearly. Normals and tangents are not renormalized on
+		 * purpose: linear is what the rasterizer interpolates across the uncut triangle, so a cut changes no shading, and a
+		 * (0, 0) tangent (the mesh's tangent) has to stay (0, 0).
+		 */
 		OverlayVertex LerpVertex(const OverlayVertex &a, const OverlayVertex &b, const float t)
 		{
 			const auto lerp = [t](const float p, const float q) { return p + (q - p) * t; };
@@ -3446,6 +3451,9 @@ namespace SceneryEditorX::XPlane
 				markings.tangentX = mesh.tangentX;
 				markings.tangentZ = mesh.tangentZ;
 				AppendRunwayMarkings(markings, runway, m_Projection, runwayHeight + RUNWAY_MARKINGS_LIFT);
+				// Cut by every higher-ranked runway that draws a surface: all but transparent ones, since one whose art is
+				// missing here still gets the airport scene's flat-colour quad at its rank's lift. The tire rubber
+				// (LAYER_GROUP markings +5) and the runway lights are not cut: X-Plane layers them by their own group
 				for (uint32_t j = 0; j < airport.runways.size() && !markings.indices.empty(); ++j)
 				{
 					const AptRunway &over = airport.runways[j];

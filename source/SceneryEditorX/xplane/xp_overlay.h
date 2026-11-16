@@ -471,7 +471,9 @@ namespace SceneryEditorX::XPlane
 	 * cross and every runway stays under the DSF "runways" layer group. 0 for rank 0.
 	 * The crossing is decided by the drape order taken from this height before draping (airport-relative, under 0.4 m),
 	 * not by depth: drapes don't depth-test each other in the g-buffer pass. So a rank step is never under 4 um, twice
-	 * the drape order's 2 um resolution (Renderable::MakeDrapeOrder), whatever the airport's elevation.
+	 * the drape order's 2 um resolution (Renderable::MakeDrapeOrder), whatever the airport's elevation. Past 200 runways
+	 * that floor wins over the 0.8 mm span and the top ones reach into the DSF "runways" group's heights; the order of
+	 * the runways themselves stays right (no airport comes near: the most in X-Plane 12's Global Airports is 17, KEDW).
 	 */
 	float GetRunwaySurfaceLift(uint32_t rank, size_t runways);
 
