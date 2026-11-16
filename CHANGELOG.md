@@ -78,7 +78,8 @@ versions.
   how it layers crossing runways. Editing one runway now rebuilds all of an airport's runways, since they depend on
   each other. (0.2.106.607; markings near another runway but clear of it are left whole instead of being split into
   more triangles, 0.2.108.609; each rank's lift at least 4 µm above the one below, so
-  neighbouring runways never share a drape order whatever their number, 0.2.109.610)
+  neighbouring runways never share a drape order whatever their number, 0.2.109.610; the cut skips runways that don't
+  meet and the runway height's headroom is checked at compile time, 0.2.110.611 and 0.2.111.612)
 - The airport boundary (the orange band the editor draws along an apt.dat `130` boundary) is no longer covered by the
   terrain over parts of its length. It was drawn at the terrain's own height, so whether the terrain or the band won the
   depth test came down to rounding (at KPVD the stretch beside the service road south-west of the tower was hidden from
