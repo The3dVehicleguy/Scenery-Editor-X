@@ -915,6 +915,72 @@ TEST_CASE("The terrain surface: heights, rays and draping", "[terrain]")
 	}
 }
 
+TEST_CASE("Draped object geometry takes the terrain's normal under a non-uniform scale", "[terrain]")
+{
+	// A plane rising 10 cm per meter east, with its true normal on every vertex
+	TerrainMeshPart slope;
+	slope.definition = "test.ter";
+	const float length = std::sqrt(0.01f + 1.0f);
+	const float slopeNormal[3] = { -0.1f / length, 1.0f / length, 0.0f };
+	const auto vertex = [&](const float x, const float z)
+	{
+		TerrainVertex v;
+		v.x = x;
+		v.y = 0.1f * x;
+		v.z = z;
+		v.nx = slopeNormal[0];
+		v.ny = slopeNormal[1];
+		v.nz = slopeNormal[2];
+		return v;
+	};
+	slope.vertices = { vertex(0, 0), vertex(100, 0), vertex(100, 100), vertex(0, 100) };
+	slope.indices = { 0, 2, 1, 0, 3, 2 };
+	TerrainSurface surface;
+	surface.Build({ slope });
+
+	// Turned 0.6 rad and scaled 2 x 1 x 0.5 (row vectors: rows are the scaled axes)
+	const double c = std::cos(0.6), s = std::sin(0.6);
+	const double axes[3][3] = { { 2.0 * c, 0.0, -2.0 * s }, { 0.0, 1.0, 0.0 }, { 0.5 * s, 0.0, 0.5 * c } };
+	const double origin[3] = { 50.0, 7.0, 50.0 };
+	// Normals into the terrain's frame go through the inverse transpose: n * diag(1/2, 1, 2) * R
+	const auto normalToTerrain = [&](const OverlayVertex &v, double out[3])
+	{
+		const double a = v.nx / 2.0, b = v.ny, d = 2.0 * v.nz;
+		out[0] = a * c + d * s;
+		out[1] = b;
+		out[2] = -a * s + d * c;
+		const double n = std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+		for (int j = 0; j < 3; ++j)
+			out[j] /= n;
+	};
+
+	std::vector<OverlayVertex> vertices(4);
+	const float corners[4][2] = { { -1.5f, -4.0f }, { 1.5f, -4.0f }, { 1.5f, 4.0f }, { -1.5f, 4.0f } };
+	for (int i = 0; i < 4; ++i)
+	{
+		vertices[i].x = corners[i][0];
+		vertices[i].z = corners[i][1];
+		vertices[i].y = 0.01f;
+	}
+	std::vector<uint32_t> indices = { 0, 2, 1, 0, 3, 2 };
+	REQUIRE(surface.DrapePlaced(vertices, indices, axes, origin));
+
+	for (const OverlayVertex &v : vertices)
+	{
+		// On the slope, 1 cm up
+		double placed[3];
+		for (int j = 0; j < 3; ++j)
+			placed[j] = v.x * axes[0][j] + v.y * axes[1][j] + v.z * axes[2][j] + origin[j];
+		CHECK_THAT(placed[1], WithinAbs(0.1 * placed[0] + 0.01, 1e-3));
+		// Its normal, taken back into the terrain's frame, is the slope's
+		double n[3];
+		normalToTerrain(v, n);
+		CHECK_THAT(n[0], WithinAbs(slopeNormal[0], 1e-4));
+		CHECK_THAT(n[1], WithinAbs(slopeNormal[1], 1e-4));
+		CHECK_THAT(n[2], WithinAbs(slopeNormal[2], 1e-4));
+	}
+}
+
 TEST_CASE("Every X-Plane 12 default .ter parses with its textures", "[assets][terrain][xplane-install][library-sweep]")
 {
 	const fs::path xplane = FindXPlane();

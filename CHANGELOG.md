@@ -73,7 +73,8 @@ versions.
   where it rose (KPVD's 34 m parking bays: more than 8.5 cm within 10 m at 10 of the 259 placed). Each placement now
   cuts its static draped batches along the terrain's triangles (`TerrainSurface::DrapePlaced`) and draws its own copy;
   a moved object is draped again once it stands still for a few frames, and stays rigid while it is dragged. Animated
-  draped geometry, and a batch that reaches off the terrain, still draw flat. (0.2.102.603)
+  draped geometry, and a batch that reaches off the terrain, still draw flat. (0.2.102.603; the terrain's normal kept
+  on objects scaled unevenly, and moved objects checked on a steady schedule, 0.2.103.604)
 - The ground no longer turns grey within 700 m of the camera: zooming in on an airport showed a flat grey disc where
   the terrain should be (grass, fields, towns), moving with the camera, with only pavements and objects drawn on it. The
   depth passes took the alpha of an X-Plane `.ter` base texture for coverage and cut the terrain out within 700 m (the

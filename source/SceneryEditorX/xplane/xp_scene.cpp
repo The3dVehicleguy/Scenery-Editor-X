@@ -136,7 +136,6 @@ namespace SceneryEditorX::XPlane
 		{
 			uint64_t terrainGeneration = 0;
 			uint32_t phase = 0;				// Placements whose transform is compared this frame (DRAPE_CHECK_PHASES)
-			uint32_t index = 0;				// Draped placements seen so far this frame
 			uint32_t placements = 0;		// Draped this frame
 			uint32_t waiting = 0;			// Due but left for the next frame (budget spent)
 			double milliseconds = 0.0;		// Spent draping this frame
@@ -922,7 +921,8 @@ namespace SceneryEditorX::XPlane
 		 * gizmo work as before) and into this frame's chunk mesh; FinishDrapes() points the batch entities at it. A batch
 		 * that reaches off the terrain, and every batch without terrain, draws the asset's flat copy (set here). The root's
 		 * local transform is the placement in the terrain's frame, as placing took it for the object's height
-		 * (ObjectHeight, HeightOf).
+		 * (ObjectHeight, HeightOf): moving a parent (an airport moved as a whole) carries the drapes rigidly, as it carries
+		 * the objects' heights.
 		 */
 		void DrapeBatches(const XPlaneObjectComponent &object, XPlaneDrapeComponent &drape, const TransformComponent &transform, DrapeFrame &frame,
 			DrapeBurst &burst)
@@ -1014,7 +1014,8 @@ namespace SceneryEditorX::XPlane
 		void UpdateDrapes(entt::registry &registry, const entt::entity rootHandle, XPlaneDrapeComponent &drape, DrapeFrame &frame)
 		{
 			const bool terrainChanged = !drape.done || drape.terrain != frame.terrainGeneration;
-			const bool inPhase = frame.index++ % DRAPE_CHECK_PHASES == frame.phase;
+			// The phase comes from the entity, not the view's order: adding or removing drape components reorders the view
+			const bool inPhase = static_cast<uint32_t>(entt::to_integral(rootHandle)) % DRAPE_CHECK_PHASES == frame.phase;
 			if (!terrainChanged && !inPhase)
 				return;
 

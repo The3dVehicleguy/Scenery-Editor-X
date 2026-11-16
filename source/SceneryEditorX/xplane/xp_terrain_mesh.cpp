@@ -968,11 +968,17 @@ namespace SceneryEditorX::XPlane
 			{ (a[1][2] * a[2][0] - a[1][0] * a[2][2]) * s, (a[0][0] * a[2][2] - a[0][2] * a[2][0]) * s, (a[0][2] * a[1][0] - a[0][0] * a[1][2]) * s },
 			{ (a[1][0] * a[2][1] - a[1][1] * a[2][0]) * s, (a[0][1] * a[2][0] - a[0][0] * a[2][1]) * s, (a[0][0] * a[1][1] - a[0][1] * a[1][0]) * s } };
 
-		// p * m for a row vector; normals are only turned (and scaled), then normalized
+		// p * m for a row vector, and p * m^T: normals go through the inverse transpose of what moves the points (into the
+		// terrain's frame n * inv^T, back n * axes^T), so they stay normal to the surface under a non-uniform scale too
 		const auto multiply = [](const double (*m)[3], const double x, const double y, const double z, double out[3])
 		{
 			for (int j = 0; j < 3; ++j)
 				out[j] = x * m[0][j] + y * m[1][j] + z * m[2][j];
+		};
+		const auto multiplyTransposed = [](const double (*m)[3], const double x, const double y, const double z, double out[3])
+		{
+			for (int j = 0; j < 3; ++j)
+				out[j] = x * m[j][0] + y * m[j][1] + z * m[j][2];
 		};
 		const auto setNormal = [](OverlayVertex &vertex, const double n[3])
 		{
@@ -988,7 +994,7 @@ namespace SceneryEditorX::XPlane
 		{
 			double p[3], n[3];
 			multiply(a, vertex.x, vertex.y, vertex.z, p);
-			multiply(a, vertex.nx, vertex.ny, vertex.nz, n);
+			multiplyTransposed(inv, vertex.nx, vertex.ny, vertex.nz, n);
 			const double x = origin[0] + p[0], z = origin[2] + p[2];
 			double bary[3];
 			if (Locate(x, z, bary) == NONE)
@@ -1007,7 +1013,7 @@ namespace SceneryEditorX::XPlane
 		{
 			double p[3], n[3];
 			multiply(inv, vertex.x - origin[0], vertex.y - origin[1], vertex.z - origin[2], p);
-			multiply(inv, vertex.nx, vertex.ny, vertex.nz, n);
+			multiplyTransposed(a, vertex.nx, vertex.ny, vertex.nz, n);
 			vertex.x = static_cast<float>(p[0]);
 			vertex.y = static_cast<float>(p[1]);
 			vertex.z = static_cast<float>(p[2]);
