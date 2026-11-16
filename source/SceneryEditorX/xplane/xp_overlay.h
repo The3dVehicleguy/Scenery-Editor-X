@@ -266,7 +266,9 @@ namespace SceneryEditorX::XPlane
 		/**
 		 * @brief Textured apt.dat surfaces: pavement and runways with the library's pavement .pol textures (by surface
 		 * code), painted lines and light strings with the library's .lin / .str assets.
-		 * @param pavementHeights Y of each pavement (file order), runwayHeight the runways', lineHeight the lines'.
+		 * Where runways cross, the higher-ranked one is on top (GetRunwayRanks): its surface GetRunwaySurfaceLift() higher,
+		 * the others' markings cut away inside it.
+		 * @param pavementHeights Y of each pavement (file order), runwayHeight the runways' (rank 0), lineHeight the lines'.
 		 */
 		void BuildAirportSurfaces(const AptAirport &airport, const std::vector<float> &pavementHeights, float runwayHeight, float lineHeight, const Options &options, OverlayBuild &out);
 
@@ -452,6 +454,36 @@ namespace SceneryEditorX::XPlane
 	 * into a RUNWAY_MARKINGS atlas. FAA / ICAO dimensions. False when the runway has no markings.
 	 */
 	bool AppendRunwayMarkings(OverlayMesh &mesh, const AptRunway &runway, const GeoProjection &projection, float y);
+
+	/**
+	 * @brief Which runway is on top where runways cross: each runway's rank, 0 for the bottom one. The top runway's surface
+	 * and markings go on straight through an intersection; the other runway's markings stop at its edges and go on past
+	 * them (ICAO Annex 14 5.2.1.3, FAA AC 150/5340-1). Ranked by: paved over unpaved, then approach class from the
+	 * markings of the more important end (precision, non-precision, visual, none; FAA, UK and EASA codes alike), then the
+	 * earlier row on top, as apt.dat layers pavement. Transparent runways draw nothing and rank lowest.
+	 * ASSUMPTION: X-Plane doesn't document how it layers crossing runways; this is the painted-marking rule.
+	 */
+	std::vector<uint32_t> GetRunwayRanks(const std::vector<AptRunway> &runways);
+
+	/**
+	 * @brief How far a runway's surface sits above the airport's runway height for its rank (GetRunwayRanks): up to
+	 * 0.1 mm a rank and under 0.8 mm in all (up to 200 runways), so the top runway's surface covers the others where they
+	 * cross and every runway stays under the DSF "runways" layer group. 0 for rank 0.
+	 * The crossing is decided by the drape order taken from this height before draping (airport-relative, under 0.4 m),
+	 * not by depth: drapes don't depth-test each other in the g-buffer pass. So a rank step is never under 4 um, twice
+	 * the drape order's 2 um resolution (Renderable::MakeDrapeOrder), whatever the airport's elevation. Past 200 runways
+	 * that floor wins over the 0.8 mm span and the top ones reach into the DSF "runways" group's heights; the order of
+	 * the runways themselves stays right (no airport comes near: the most in X-Plane 12's Global Airports is 17, KEDW).
+	 */
+	float GetRunwaySurfaceLift(uint32_t rank, size_t runways);
+
+	/**
+	 * @brief Removes what lies inside a convex polygon (local meters, either winding) from a mesh: triangles partly inside
+	 * are cut along its edges into convex pieces with their attributes interpolated, triangles wholly inside go, and
+	 * so do vertices nothing uses any more (the bounds follow). False when nothing was inside. Valid mesh bounds are
+	 * trusted to hold every vertex (AddVertex keeps them so): bounds that miss the cut return false at once.
+	 */
+	bool CutOutConvex(OverlayMesh &mesh, const std::vector<Point2> &polygon);
 
 	/* @brief Appends a textured ribbon along a path: u spans [s1, s2] across, v runs along the path (meters / scaleT). */
 	void AppendTexturedRibbon(OverlayMesh &mesh, const std::vector<Point2> &path, bool closed, float y, float width, float s1, float s2, float scaleT, bool mirror);

@@ -67,6 +67,20 @@ versions.
 
 ### Fixed
 
+- Where runways cross, the more important runway's markings now go on straight through the intersection and the other
+  runway's stop at its edges, like real paint (issue #99; ICAO Annex 14 5.2.1.3). They used to blend: at KGON, 15/33's
+  centerline and edge stripes ran across 5/23's touchdown markings. Every runway's markings were drawn over every
+  runway's surface, because all runway surfaces sat at one height and all markings 8 mm above them. Now the other
+  runway's markings are cut away inside the one on top (`CutOutConvex`), and the top runway's surface sits a fraction
+  of a millimetre higher so its pavement shows at the crossing. Which one is on top (`GetRunwayRanks`): paved over
+  unpaved, then precision approach over non-precision over visual over none (by the more important end's marking code,
+  FAA, UK and EASA alike), then the earlier row in apt.dat, the way apt.dat layers pavement. X-Plane doesn't document
+  how it layers crossing runways. Editing one runway now rebuilds all of an airport's runways, since they depend on
+  each other. (0.2.106.607; markings near another runway but clear of it are left whole instead of being split into
+  more triangles, 0.2.108.609; each rank's lift at least 4 µm above the one below, so
+  neighbouring runways never share a drape order whatever their number, 0.2.109.610; the cut skips runways that don't
+  meet and the runway height's headroom is checked at compile time, 0.2.110.611 and 0.2.111.612; a cut outline with a
+  repeated corner cuts too, 0.2.112.613)
 - The airport boundary (the orange band the editor draws along an apt.dat `130` boundary) is no longer covered by the
   terrain over parts of its length. It was drawn at the terrain's own height, so whether the terrain or the band won the
   depth test came down to rounding (at KPVD the stretch beside the service road south-west of the tower was hidden from
