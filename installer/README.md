@@ -2,10 +2,10 @@
 
 `installer/windows/` builds a Windows setup program for test builds of Scenery Editor X (alpha by default).
 
-| File | What it is |
-| --- | --- |
-| `Build-Installer.ps1` | Stages a Release build and compiles the installer. Start here. |
-| `SceneryEditorX.nsi` | The NSIS installer script. |
+| File                     | What it is                                                                  |
+| ------------------------ | --------------------------------------------------------------------------- |
+| `Build-Installer.ps1`  | Stages a Release build and compiles the installer. Start here.              |
+| `SceneryEditorX.nsi`   | The NSIS installer script.                                                  |
 | `FileAssociations.nsh` | Registers the editor as the handler of `.edX` and `.sex` project files. |
 
 ## Building it
@@ -46,21 +46,21 @@ setup; `-NoVulkanRuntime` leaves it out.
 Everything the editor loads is installed beside it, including the Visual C++ runtime and the Slang shader compiler.
 Two things it needs live outside its folder:
 
-| Prerequisite | What setup does |
-| --- | --- |
+| Prerequisite                                    | What setup does                                                                                                                                                                                                                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Vulkan runtime (`vulkan-1.dll`), 1.3 or newer | Graphics drivers install it. If it's missing or too old, an all-users install offers to run LunarG's Vulkan Runtime installer, which asks the user to accept its license. A per-user or silent install can't run it, so setup says how to fix it. |
-| A graphics driver with Vulkan 1.3 | Only the card's maker can provide it. Setup warns and lists the NVIDIA, AMD and Intel driver pages. |
+| A graphics driver with Vulkan 1.3               | Only the card's maker can provide it. Setup warns and lists the NVIDIA, AMD and Intel driver pages.                                                                                                                                               |
 
 Setup checks both by running `SceneryEditorX.exe --check-vulkan`. The check opens no window and writes no log; its
 exit code says what's missing:
 
-| Exit code | Meaning |
-| --- | --- |
-| 0 | A GPU with Vulkan 1.3 |
-| 2 | No usable Vulkan runtime (`vulkan-1.dll` missing or damaged) |
-| 3 | Vulkan runtime older than 1.3 |
-| 4 | No graphics driver offers Vulkan |
-| 5 | GPUs found, none with Vulkan 1.3 |
+| Exit code | Meaning                                                        |
+| --------- | -------------------------------------------------------------- |
+| 0         | A GPU with Vulkan 1.3                                          |
+| 2         | No usable Vulkan runtime (`vulkan-1.dll` missing or damaged) |
+| 3         | Vulkan runtime older than 1.3                                  |
+| 4         | No graphics driver offers Vulkan                               |
+| 5         | GPUs found, none with Vulkan 1.3                               |
 
 The editor runs the same check at startup. If it fails, the editor shows a message naming what to install instead of
 crashing.
