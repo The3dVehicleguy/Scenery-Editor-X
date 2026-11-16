@@ -930,6 +930,10 @@ namespace SceneryEditorX::XPlane
 		}
 		if (std::abs(twiceArea) < 2.0 * CUT_MIN_AREA)
 			return false;
+		// A mesh whose bounds miss the cut's (runways that don't cross) is left as it is before anything is allocated
+		if (mesh.bounds.valid && (mesh.bounds.maxX <= cutBounds.minX + CUT_EPSILON || mesh.bounds.minX >= cutBounds.maxX - CUT_EPSILON ||
+			mesh.bounds.maxZ <= cutBounds.minZ + CUT_EPSILON || mesh.bounds.minZ >= cutBounds.maxZ - CUT_EPSILON))
+			return false;
 		const double winding = twiceArea > 0.0 ? 1.0 : -1.0;
 
 		// Each edge's start and unit direction (times the winding), once: the signed distance inward is then a cross product

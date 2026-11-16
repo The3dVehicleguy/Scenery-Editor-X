@@ -480,7 +480,8 @@ namespace SceneryEditorX::XPlane
 	/**
 	 * @brief Removes what lies inside a convex polygon (local meters, either winding) from a mesh: triangles partly inside
 	 * are cut along its edges into convex pieces with their attributes interpolated, triangles wholly inside go, and
-	 * so do vertices nothing uses any more (the bounds follow). False when nothing was inside.
+	 * so do vertices nothing uses any more (the bounds follow). False when nothing was inside. Valid mesh bounds are
+	 * trusted to hold every vertex (AddVertex keeps them so): bounds that miss the cut return false at once.
 	 */
 	bool CutOutConvex(OverlayMesh &mesh, const std::vector<Point2> &polygon);
 

@@ -1635,6 +1635,14 @@ TEST_CASE("Crossing runways: the more important runway goes on through the inter
 		CHECK_FALSE(CutOutConvex(untouched, { { 20.0, 0.0 }, { 30.0, 0.0 }, { 30.0, 10.0 }, { 20.0, 10.0 } }));
 		CHECK_FALSE(CutOutConvex(untouched, { { 10.0, 0.0 }, { 20.0, 0.0 }, { 20.0, 10.0 }, { 10.0, 10.0 } }));	// Edge to edge
 		CHECK(untouched.indices == mesh.indices);
+		// ... the same with the mesh's bounds known (the early way out), while bounds that do overlap still cut
+		OverlayMesh bounded = mesh;
+		for (const OverlayVertex &vertex : bounded.vertices)
+			bounded.bounds.Add(Point2{ vertex.x, vertex.z });
+		CHECK_FALSE(CutOutConvex(bounded, { { 20.0, 0.0 }, { 30.0, 0.0 }, { 30.0, 10.0 }, { 20.0, 10.0 } }));
+		CHECK(bounded.indices == mesh.indices);
+		CHECK(CutOutConvex(bounded, { { 4.0, -5.0 }, { 4.0, 15.0 }, { 6.0, 15.0 }, { 6.0, -5.0 } }));
+		CHECK(area(bounded) == Catch::Approx(80.0).margin(1e-4));
 
 		// Past a corner: within the cut's box and no edge of the cut separates them (only the triangle's own long side
 		// does), so it is kept whole, not split into pieces covering the same area
