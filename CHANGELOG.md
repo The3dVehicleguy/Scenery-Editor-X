@@ -67,6 +67,11 @@ versions.
 
 ### Fixed
 
+- The airport boundary (the orange band the editor draws along an apt.dat `130` boundary) is no longer covered by the
+  terrain over parts of its length. It was drawn at the terrain's own height, so whether the terrain or the band won the
+  depth test came down to rounding (at KPVD the stretch beside the service road south-west of the tower was hidden from
+  far away, and up close too once the terrain was back in the depth buffer within 700 m). It now sits 1 mm above the
+  terrain, still the lowest of the airport's drapes (`HEIGHT_BOUNDARY`). (0.2.101.602)
 - Painted markings placed as X-Plane objects (`ATTR_draped` geometry: parking bays, stop bars, road markings from DSF
   objects and `.agp` art) now follow the terrain like in X-Plane instead of sinking into sloping ground. They were drawn
   rigid and flat at the terrain's height under the object's origin, so the far end of a long one went under the ground
