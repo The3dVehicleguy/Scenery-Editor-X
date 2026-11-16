@@ -67,6 +67,16 @@ versions.
 
 ### Fixed
 
+- Where runways cross, the more important runway's markings now go on straight through the intersection and the other
+  runway's stop at its edges, like real paint (issue #99; ICAO Annex 14 5.2.1.3). They used to blend: at KGON, 15/33's
+  centerline and edge stripes ran across 5/23's touchdown markings. Every runway's markings were drawn over every
+  runway's surface, because all runway surfaces sat at one height and all markings 8 mm above them. Now the other
+  runway's markings are cut away inside the one on top (`CutOutConvex`), and the top runway's surface sits a fraction
+  of a millimetre higher so its pavement shows at the crossing. Which one is on top (`GetRunwayRanks`): paved over
+  unpaved, then precision approach over non-precision over visual over none (by the more important end's marking code,
+  FAA, UK and EASA alike), then the earlier row in apt.dat, the way apt.dat layers pavement. X-Plane doesn't document
+  how it layers crossing runways. Editing one runway now rebuilds all of an airport's runways, since they depend on
+  each other. (0.2.106.607)
 - Painted markings placed as X-Plane objects (`ATTR_draped` geometry: parking bays, stop bars, road markings from DSF
   objects and `.agp` art) now follow the terrain like in X-Plane instead of sinking into sloping ground. They were drawn
   rigid and flat at the terrain's height under the object's origin, so the far end of a long one went under the ground

@@ -823,6 +823,8 @@ namespace SceneryEditorX::XPlane
 				}
 			}
 
+			// Crossing runways: the higher-ranked one's surface on top (the overlay builder cuts the others' markings)
+			const std::vector<uint32_t> runwayRanks = GetRunwayRanks(airport.runways);
 			for (size_t i = 0; i < airport.runways.size(); ++i)
 			{
 				const AptRunway &runway = airport.runways[i];
@@ -853,7 +855,7 @@ namespace SceneryEditorX::XPlane
 				{
 					Point2 corners[4];
 					GetRunwayCorners(runway, projection, corners, false);
-					EmitQuad(part, corners, FlatHeight(part.paint, runwayHeight));
+					EmitQuad(part, corners, FlatHeight(part.paint, runwayHeight + GetRunwaySurfaceLift(runwayRanks[i], airport.runways.size())));
 				}
 
 				// Blast pads, a shade lower so the runway proper reads on top
@@ -2202,6 +2204,13 @@ namespace SceneryEditorX::XPlane
 				return;
 			}
 			rows.insert({ static_cast<int>(element.kind), element.index });
+		}
+		// Crossing runways depend on each other (which is on top, whose markings are cut where: GetRunwayRanks), so an
+		// edited runway rebuilds them all
+		if (std::ranges::any_of(rows, [](const std::pair<int, uint32_t> &row) { return row.first == static_cast<int>(AirportElementKind::Runway); }))
+		{
+			for (uint32_t i = 0; i < document.airport.runways.size(); ++i)
+				rows.insert({ static_cast<int>(AirportElementKind::Runway), i });
 		}
 		const ElementFilter filter = [&rows](const AirportElementKind kind, const uint32_t index) { return rows.contains({ static_cast<int>(kind), index }); };
 		RebuildAptLayer(*s_Loaded, document, &filter);

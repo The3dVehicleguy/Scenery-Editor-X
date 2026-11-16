@@ -1555,6 +1555,189 @@ TEST_CASE("Runway markings from the apt.dat marking codes", "[overlay]")
 	}
 }
 
+TEST_CASE("Crossing runways: the more important runway goes on through the intersection (issue #99)", "[overlay]")
+{
+	const GeoProjection projection(47.45, -122.3);
+	const auto area = [](const OverlayMesh &m)
+	{
+		double sum = 0.0;
+		for (size_t i = 0; i + 2 < m.indices.size(); i += 3)
+		{
+			const OverlayVertex &a = m.vertices[m.indices[i]], &b = m.vertices[m.indices[i + 1]], &c = m.vertices[m.indices[i + 2]];
+			sum += 0.5 * ((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z));
+		}
+		return sum;		// Positive: counter-clockwise from above, the overlay convention
+	};
+
+	SECTION("Ranks: paved over unpaved, then precision, non-precision, visual, none, then the earlier row")
+	{
+		const auto runway = [&projection](const int surface, const int marking0, const int marking1)
+		{
+			AptRunway r = MakeMarkedRunway(projection, marking0, marking1);
+			r.surface = surface;
+			return r;
+		};
+		// Approach class by the more important end, FAA / UK / EASA codes alike
+		CHECK(GetRunwayRanks({ runway(1, 2, 2), runway(1, 3, 0) }) == std::vector<uint32_t>{ 0, 1 });
+		CHECK(GetRunwayRanks({ runway(1, 5, 1), runway(1, 2, 2) }) == std::vector<uint32_t>{ 1, 0 });		// UK precision
+		CHECK(GetRunwayRanks({ runway(1, 6, 6), runway(1, 7, 1) }) == std::vector<uint32_t>{ 0, 1 });		// EASA
+		CHECK(GetRunwayRanks({ runway(1, 1, 1), runway(1, 0, 0) }) == std::vector<uint32_t>{ 1, 0 });		// Visual over none
+		// Equal ones: the first row on top
+		CHECK(GetRunwayRanks({ runway(1, 2, 2), runway(2, 2, 0), runway(1, 0, 2) }) == std::vector<uint32_t>{ 2, 1, 0 });
+		// Paved over unpaved whatever the codes; transparent ones (they draw nothing) at the bottom
+		CHECK(GetRunwayRanks({ runway(3, 3, 3), runway(1, 1, 1) }) == std::vector<uint32_t>{ 0, 1 });
+		CHECK(GetRunwayRanks({ runway(15, 3, 3), runway(3, 0, 0) }) == std::vector<uint32_t>{ 0, 1 });
+		CHECK(GetRunwayRanks({}).empty());
+
+		// Surface lifts: 0 for the bottom one, then up a rank at a time, all under 0.8 mm
+		CHECK(GetRunwaySurfaceLift(0, 1) == 0.0f);
+		CHECK(GetRunwaySurfaceLift(0, 2) == 0.0f);
+		CHECK(GetRunwaySurfaceLift(1, 2) == Catch::Approx(0.0001f));
+		CHECK(GetRunwaySurfaceLift(11, 12) == Catch::Approx(0.0008f));
+		CHECK(GetRunwaySurfaceLift(39, 40) <= 0.0008f + 1e-7f);
+		CHECK(GetRunwaySurfaceLift(39, 40) > GetRunwaySurfaceLift(38, 40));
+	}
+
+	SECTION("Cutting a convex area out of a mesh keeps the rest, its UVs and its winding")
+	{
+		// A 10 x 10 m quad, u = x / 10, v = z / 10, cut by a band 4 .. 6 m in x running past it in z (clockwise corners)
+		OverlayMesh mesh;
+		const double square[4][2] = { { 0.0, 0.0 }, { 0.0, 10.0 }, { 10.0, 10.0 }, { 10.0, 0.0 } };
+		for (const auto &corner : square)
+		{
+			OverlayVertex vertex;
+			vertex.x = static_cast<float>(corner[0]);
+			vertex.z = static_cast<float>(corner[1]);
+			vertex.y = 0.25f;
+			vertex.u = vertex.x / 10.0f;
+			vertex.v = vertex.z / 10.0f;
+			mesh.vertices.push_back(vertex);
+		}
+		mesh.indices = { 0, 1, 2, 0, 2, 3 };
+		REQUIRE(area(mesh) == Catch::Approx(100.0));
+
+		// Not touching: unchanged
+		OverlayMesh untouched = mesh;
+		CHECK_FALSE(CutOutConvex(untouched, { { 20.0, 0.0 }, { 30.0, 0.0 }, { 30.0, 10.0 }, { 20.0, 10.0 } }));
+		CHECK_FALSE(CutOutConvex(untouched, { { 10.0, 0.0 }, { 20.0, 0.0 }, { 20.0, 10.0 }, { 10.0, 10.0 } }));	// Edge to edge
+		CHECK(untouched.indices == mesh.indices);
+
+		OverlayMesh cut = mesh;
+		REQUIRE(CutOutConvex(cut, { { 4.0, -5.0 }, { 4.0, 15.0 }, { 6.0, 15.0 }, { 6.0, -5.0 } }));
+		CHECK(area(cut) == Catch::Approx(80.0).margin(1e-4));
+		for (size_t i = 0; i + 2 < cut.indices.size(); i += 3)
+		{
+			const OverlayVertex &a = cut.vertices[cut.indices[i]], &b = cut.vertices[cut.indices[i + 1]], &c = cut.vertices[cut.indices[i + 2]];
+			CHECK((b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z) >= 0.0f);
+			const double centerX = (a.x + b.x + c.x) / 3.0;
+			CHECK((centerX < 4.0 || centerX > 6.0));
+		}
+		for (const OverlayVertex &vertex : cut.vertices)
+		{
+			CHECK((vertex.x <= 4.0f + 1e-4f || vertex.x >= 6.0f - 1e-4f));
+			CHECK(vertex.u == Catch::Approx(vertex.x / 10.0f).margin(1e-5));
+			CHECK(vertex.v == Catch::Approx(vertex.z / 10.0f).margin(1e-5));
+			CHECK(vertex.y == Catch::Approx(0.25f));
+		}
+		CHECK(cut.bounds.minX == Catch::Approx(0.0));
+		CHECK(cut.bounds.maxX == Catch::Approx(10.0));
+
+		// A diamond in the middle (a cut that is not axis-aligned): its area goes, the corners stay
+		OverlayMesh diamond = mesh;
+		REQUIRE(CutOutConvex(diamond, { { 5.0, 3.0 }, { 7.0, 5.0 }, { 5.0, 7.0 }, { 3.0, 5.0 } }));
+		CHECK(area(diamond) == Catch::Approx(92.0).margin(1e-4));
+
+		// Covering it all: nothing left
+		OverlayMesh gone = mesh;
+		REQUIRE(CutOutConvex(gone, { { -1.0, -1.0 }, { 11.0, -1.0 }, { 11.0, 11.0 }, { -1.0, 11.0 } }));
+		CHECK(gone.indices.empty());
+		CHECK(gone.vertices.empty());
+	}
+
+	SECTION("The builder: the precision runway's surface on top, the other runway's markings stop at its edges")
+	{
+		TempDir temp;
+		const fs::path runwayPol = temp.Write("lib/rwy/runway.pol",
+			"A\n850\nDRAPED_POLYGON\n\nTEXTURE runway.png\nSCALE 22 44\nLAYER_GROUP runways 0\nRUNWAY_MARKINGS 1 1 1 1 RWY_markings.png\n");
+		const AssetResolver resolver = [&](const std::string_view path) -> fs::path
+		{
+			return path == "lib/airport/default_runways/concrete/runway.pol" ? runwayPol : fs::path();
+		};
+
+		// Like KGON: a non-precision runway crossing a precision one, listed first (so the class decides, not the order)
+		const AptRunway precision = MakeMarkedRunway(projection, 3, 2);		// North - south through the origin, 45 m wide
+		AptRunway crossing = MakeMarkedRunway(projection, 2, 2);
+		crossing.width = 30.0f;
+		projection.ToGeo(Point2{ -1000.0, 0.0 }, crossing.ends[0].latitude, crossing.ends[0].longitude);
+		projection.ToGeo(Point2{ 1000.0, 0.0 }, crossing.ends[1].latitude, crossing.ends[1].longitude);
+		crossing.ends[0].designator = "09";
+		crossing.ends[1].designator = "27";
+		AptAirport airport;
+		airport.id = "TEST";
+		airport.runways = { crossing, precision };
+		REQUIRE(GetRunwayRanks(airport.runways) == std::vector<uint32_t>{ 0, 1 });
+
+		OverlayBuilder builder(resolver, projection);
+		OverlayBuild out;
+		builder.BuildAirportSurfaces(airport, {}, 0.2f, 0.3f, OverlayBuilder::Options{}, out);
+		const OverlayMesh *surfaces[2] = {};
+		const OverlayMesh *markings[2] = {};
+		for (const OverlayMesh &mesh : out.meshes)
+		{
+			if (mesh.kind != OverlayKind::Runway || mesh.placement > 1)
+				continue;
+			if (mesh.shading == OverlayShading::Markings)
+				markings[mesh.placement] = &mesh;
+			else if (!surfaces[mesh.placement])
+				surfaces[mesh.placement] = &mesh;
+		}
+		REQUIRE(surfaces[0]);
+		REQUIRE(surfaces[1]);
+		REQUIRE(markings[0]);
+		REQUIRE(markings[1]);
+
+		// The precision runway's surface over the other's, both under the DSF "runways" group (1 mm up) and the markings
+		CHECK(surfaces[0]->vertices.front().y == Catch::Approx(0.2f));
+		CHECK(surfaces[1]->vertices.front().y > surfaces[0]->vertices.front().y);
+		CHECK(surfaces[1]->vertices.front().y < 0.2f + 0.001f);
+		CHECK(markings[0]->vertices.front().y > 0.2f + 0.001f);
+
+		// Its markings whole, as if it were alone
+		OverlayMesh alone;
+		REQUIRE(AppendRunwayMarkings(alone, precision, projection, 0.0f));
+		CHECK(markings[1]->vertices.size() == alone.vertices.size());
+		CHECK(markings[1]->indices.size() == alone.indices.size());
+
+		// The crossing runway's: nothing inside the precision runway (|x| < 22.5 m), centerline and edge stripes on both sides
+		OverlayMesh uncut;
+		REQUIRE(AppendRunwayMarkings(uncut, crossing, projection, 0.0f));
+		// What went is what lay inside it: the centerline dashes and both edge stripes across 45 m
+		CHECK(area(*markings[0]) < area(uncut) - 1.0);
+		for (size_t i = 0; i + 2 < markings[0]->indices.size(); i += 3)
+		{
+			const OverlayVertex &a = markings[0]->vertices[markings[0]->indices[i]];
+			const OverlayVertex &b = markings[0]->vertices[markings[0]->indices[i + 1]];
+			const OverlayVertex &c = markings[0]->vertices[markings[0]->indices[i + 2]];
+			CHECK(std::abs((a.x + b.x + c.x) / 3.0) > 22.5 - 1e-3);
+		}
+		bool west = false, east = false;	// The edge stripes (15 m off the centerline) run up to its edges from both sides
+		for (const OverlayVertex &vertex : markings[0]->vertices)
+		{
+			CHECK(std::abs(vertex.x) >= 22.5f - 1e-3f);
+			if (std::abs(vertex.z) > 13.0f && std::abs(std::abs(vertex.x) - 22.5f) < 1e-3f)
+				(vertex.x < 0.0f ? west : east) = true;
+		}
+		CHECK(west);
+		CHECK(east);
+
+		// Swapping the marking codes swaps who is on top
+		AptAirport swapped = airport;
+		for (int e = 0; e < 2; ++e)
+			std::swap(swapped.runways[0].ends[e].marking, swapped.runways[1].ends[e].marking);
+		CHECK(GetRunwayRanks(swapped.runways) == std::vector<uint32_t>{ 1, 0 });
+	}
+}
+
 TEST_CASE("Overlay builder draws X-Plane 12 runway art: tile atlas, decals and markings", "[overlay]")
 {
 	TempDir temp;

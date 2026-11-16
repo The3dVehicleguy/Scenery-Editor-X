@@ -807,6 +807,212 @@ namespace SceneryEditorX::XPlane
 		return mesh.indices.size() > before;
 	}
 
+	namespace
+	{
+		constexpr float RUNWAY_RANK_STEP = 0.0001f;		// Surface lift per runway rank (GetRunwaySurfaceLift)
+		constexpr float RUNWAY_RANK_SPAN = 0.0008f;		// ... and in all: under the DSF "runways" group's lowest offset, 1 mm up
+		constexpr double CUT_EPSILON = 1.0e-6;			// Meters: a vertex this close to a cutting edge lies on it
+		constexpr double CUT_MIN_AREA = 1.0e-8;			// Square meters: cut pieces smaller than this are slivers, dropped
+
+		OverlayVertex LerpVertex(const OverlayVertex &a, const OverlayVertex &b, const float t)
+		{
+			const auto lerp = [t](const float p, const float q) { return p + (q - p) * t; };
+			OverlayVertex vertex;
+			vertex.x = lerp(a.x, b.x);
+			vertex.y = lerp(a.y, b.y);
+			vertex.z = lerp(a.z, b.z);
+			vertex.u = lerp(a.u, b.u);
+			vertex.v = lerp(a.v, b.v);
+			vertex.nx = lerp(a.nx, b.nx);
+			vertex.ny = lerp(a.ny, b.ny);
+			vertex.nz = lerp(a.nz, b.nz);
+			vertex.tx = lerp(a.tx, b.tx);
+			vertex.tz = lerp(a.tz, b.tz);
+			return vertex;
+		}
+
+		/* @brief The part of a convex polygon where side(vertex) >= 0 (Sutherland-Hodgman against one line); keeps its winding. */
+		template <typename Side>
+		std::vector<OverlayVertex> ClipToSide(const std::vector<OverlayVertex> &polygon, const Side &side)
+		{
+			std::vector<OverlayVertex> out;
+			const size_t count = polygon.size();
+			for (size_t i = 0; i < count; ++i)
+			{
+				const OverlayVertex &current = polygon[i], &next = polygon[(i + 1) % count];
+				const double a = side(current), b = side(next);
+				if (a >= 0.0)
+					out.push_back(current);
+				if ((a >= 0.0) != (b >= 0.0))
+					out.push_back(LerpVertex(current, next, static_cast<float>(a / (a - b))));
+			}
+			return out;
+		}
+
+		double PolygonArea(const std::vector<OverlayVertex> &polygon)
+		{
+			double area = 0.0;
+			for (size_t i = 0; i < polygon.size(); ++i)
+			{
+				const OverlayVertex &a = polygon[i], &b = polygon[(i + 1) % polygon.size()];
+				area += static_cast<double>(a.x) * b.z - static_cast<double>(b.x) * a.z;
+			}
+			return 0.5 * std::abs(area);
+		}
+	}
+
+	std::vector<uint32_t> GetRunwayRanks(const std::vector<AptRunway> &runways)
+	{
+		struct Key
+		{
+			bool drawn = false;		// Not transparent
+			bool paved = false;
+			int approach = 0;		// MarkingClass of the more important end
+		};
+		std::vector<Key> keys(runways.size());
+		for (size_t i = 0; i < runways.size(); ++i)
+		{
+			const SurfaceFamily family = GetSurfaceFamily(runways[i].surface);
+			keys[i].drawn = family != SurfaceFamily::Transparent;
+			keys[i].paved = family == SurfaceFamily::Asphalt || family == SurfaceFamily::Concrete;
+			keys[i].approach = std::max(MarkingClass(runways[i].ends[0].marking), MarkingClass(runways[i].ends[1].marking));
+		}
+
+		// Bottom first: transparent, unpaved, lower approach class, later in the file
+		std::vector<uint32_t> order(runways.size());
+		for (uint32_t i = 0; i < order.size(); ++i)
+			order[i] = i;
+		std::ranges::sort(order, [&keys](const uint32_t a, const uint32_t b)
+		{
+			const Key &ka = keys[a], &kb = keys[b];
+			if (ka.drawn != kb.drawn)
+				return !ka.drawn;
+			if (ka.paved != kb.paved)
+				return !ka.paved;
+			if (ka.approach != kb.approach)
+				return ka.approach < kb.approach;
+			return a > b;
+		});
+		std::vector<uint32_t> ranks(runways.size());
+		for (uint32_t rank = 0; rank < order.size(); ++rank)
+			ranks[order[rank]] = rank;
+		return ranks;
+	}
+
+	float GetRunwaySurfaceLift(const uint32_t rank, const size_t runways)
+	{
+		if (runways < 2)
+			return 0.0f;
+		const float step = std::min(RUNWAY_RANK_STEP, RUNWAY_RANK_SPAN / static_cast<float>(runways - 1));
+		return step * static_cast<float>(std::min<size_t>(rank, runways - 1));
+	}
+
+	bool CutOutConvex(OverlayMesh &mesh, const std::vector<Point2> &polygon)
+	{
+		const size_t corners = polygon.size();
+		if (corners < 3 || mesh.indices.size() < 3)
+			return false;
+
+		// Its winding, so "inside" is the same side of every edge whichever way the corners run
+		double twiceArea = 0.0;
+		Bounds2 cutBounds;
+		for (size_t k = 0; k < corners; ++k)
+		{
+			const Point2 &a = polygon[k], &b = polygon[(k + 1) % corners];
+			twiceArea += a.x * b.z - b.x * a.z;
+			cutBounds.Add(a);
+		}
+		if (std::abs(twiceArea) < 2.0 * CUT_MIN_AREA)
+			return false;
+		const double winding = twiceArea > 0.0 ? 1.0 : -1.0;
+		const auto inside = [&polygon, corners, winding](const size_t edge, const double x, const double z)	// > 0: inside of the edge
+		{
+			const Point2 &a = polygon[edge], &b = polygon[(edge + 1) % corners];
+			const double length = std::hypot(b.x - a.x, b.z - a.z);
+			return length > 0.0 ? winding * ((b.x - a.x) * (z - a.z) - (b.z - a.z) * (x - a.x)) / length : 0.0;
+		};
+
+		std::vector<OverlayVertex> vertices;
+		std::vector<uint32_t> indices;
+		std::vector<uint32_t> remap(mesh.vertices.size(), UINT32_MAX);
+		const auto keep = [&](const uint32_t index)
+		{
+			if (remap[index] == UINT32_MAX)
+			{
+				remap[index] = static_cast<uint32_t>(vertices.size());
+				vertices.push_back(mesh.vertices[index]);
+			}
+			indices.push_back(remap[index]);
+		};
+
+		bool changed = false;
+		for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3)
+		{
+			const uint32_t corner[3] = { mesh.indices[t], mesh.indices[t + 1], mesh.indices[t + 2] };
+			const OverlayVertex *triangle[3] = { &mesh.vertices[corner[0]], &mesh.vertices[corner[1]], &mesh.vertices[corner[2]] };
+
+			// Wholly outside the cut's box or one of its edges: kept as it is. Wholly inside every edge: gone
+			double minX = triangle[0]->x, maxX = minX, minZ = triangle[0]->z, maxZ = minZ;
+			for (const OverlayVertex *vertex : triangle)
+			{
+				minX = std::min(minX, static_cast<double>(vertex->x));
+				maxX = std::max(maxX, static_cast<double>(vertex->x));
+				minZ = std::min(minZ, static_cast<double>(vertex->z));
+				maxZ = std::max(maxZ, static_cast<double>(vertex->z));
+			}
+			bool outside = maxX <= cutBounds.minX + CUT_EPSILON || minX >= cutBounds.maxX - CUT_EPSILON || maxZ <= cutBounds.minZ + CUT_EPSILON || minZ >= cutBounds.maxZ - CUT_EPSILON;
+			bool within = true;
+			for (size_t edge = 0; edge < corners && !outside; ++edge)
+			{
+				int out = 0;
+				for (const OverlayVertex *vertex : triangle)
+				{
+					const double side = inside(edge, vertex->x, vertex->z);
+					out += side <= CUT_EPSILON ? 1 : 0;
+					within = within && side >= -CUT_EPSILON;
+				}
+				outside = out == 3;
+			}
+			if (outside)
+			{
+				for (const uint32_t index : corner)
+					keep(index);
+				continue;
+			}
+			changed = true;
+			if (within)
+				continue;
+
+			// The pieces outside the cut: past each edge in turn, of what lies inside the edges before it
+			std::vector<OverlayVertex> remaining = { *triangle[0], *triangle[1], *triangle[2] };
+			for (size_t edge = 0; edge < corners && remaining.size() >= 3; ++edge)
+			{
+				const std::vector<OverlayVertex> piece = ClipToSide(remaining, [&](const OverlayVertex &vertex) { return -inside(edge, vertex.x, vertex.z); });
+				if (piece.size() >= 3 && PolygonArea(piece) >= CUT_MIN_AREA)
+				{
+					const uint32_t base = static_cast<uint32_t>(vertices.size());
+					vertices.insert(vertices.end(), piece.begin(), piece.end());
+					for (uint32_t i = 1; i + 1 < piece.size(); ++i)
+					{
+						indices.push_back(base);
+						indices.push_back(base + i);
+						indices.push_back(base + i + 1);
+					}
+				}
+				remaining = ClipToSide(remaining, [&](const OverlayVertex &vertex) { return inside(edge, vertex.x, vertex.z); });
+			}
+		}
+		if (!changed)
+			return false;
+
+		mesh.vertices = std::move(vertices);
+		mesh.indices = std::move(indices);
+		mesh.bounds = Bounds2();
+		for (const OverlayVertex &vertex : mesh.vertices)
+			mesh.bounds.Add(Point2{ vertex.x, vertex.z });
+		return true;
+	}
+
 	void AppendTexturedRibbon(OverlayMesh &mesh, const std::vector<Point2> &path, const bool closed, const float y, const float width, const float s1, const float s2, const float scaleT, const bool mirror)
 	{
 		std::vector<Point2> points;
@@ -3180,6 +3386,9 @@ namespace SceneryEditorX::XPlane
 				out.meshes.push_back(std::move(mesh));
 		}
 
+		// Where runways cross, the higher-ranked one is on top: its surface a hair higher and its markings whole, the
+		// others' markings cut away inside it, so they stop at its edges (GetRunwayRanks)
+		const std::vector<uint32_t> runwayRanks = GetRunwayRanks(airport.runways);
 		for (uint32_t i = 0; i < airport.runways.size(); ++i)
 		{
 			const AptRunway &runway = airport.runways[i];
@@ -3200,8 +3409,8 @@ namespace SceneryEditorX::XPlane
 			// The texture starts at end 0's center, so slab joints line up with the centerline and the threshold
 			float scaleS = 1.0f, scaleT = 1.0f;
 			GetPolygonUvScale(*asset, scaleS, scaleT);
-			AppendTexturedPolygon(mesh, { { corners[0], corners[1], corners[2], corners[3] } }, runwayHeight, scaleS, scaleT, runway.GetHeading(),
-				m_Projection.ToLocal(runway.ends[0].latitude, runway.ends[0].longitude));
+			AppendTexturedPolygon(mesh, { { corners[0], corners[1], corners[2], corners[3] } }, runwayHeight + GetRunwaySurfaceLift(runwayRanks[i], airport.runways.size()),
+				scaleS, scaleT, runway.GetHeading(), m_Projection.ToLocal(runway.ends[0].latitude, runway.ends[0].longitude));
 			ApplyPolygonShading(mesh, *asset, file, out);
 			if (mesh.indices.empty())
 				continue;
@@ -3221,6 +3430,15 @@ namespace SceneryEditorX::XPlane
 				markings.tangentX = mesh.tangentX;
 				markings.tangentZ = mesh.tangentZ;
 				AppendRunwayMarkings(markings, runway, m_Projection, runwayHeight + RUNWAY_MARKINGS_LIFT);
+				for (uint32_t j = 0; j < airport.runways.size() && !markings.indices.empty(); ++j)
+				{
+					const AptRunway &over = airport.runways[j];
+					if (runwayRanks[j] <= runwayRanks[i] || GetSurfaceFamily(over.surface) == SurfaceFamily::Transparent)
+						continue;
+					Point2 cover[4];
+					GetRunwayCorners(over, m_Projection, cover, false);
+					CutOutConvex(markings, { cover[0], cover[1], cover[2], cover[3] });
+				}
 			}
 			// A runway's meshes stay in this order, surface first and then the layers over it (markings, rubber): the
 			// airport scene takes a runway's first mesh as its surface (SceneAirports' runway parts). OverlayTests pins it
