@@ -31,6 +31,7 @@
 #include "xp_scene.h"
 #include "xp_airport_scene.h"
 #include "xp_datarefs.h"
+#include "xp_drape_schedule.h"
 #include "xp_forest3d.h"
 #include "xp_library_manager.h"
 #include "xp_terrain_scene.h"
@@ -97,15 +98,6 @@ namespace SceneryEditorX::XPlane
 		 */
 		constexpr uint32_t LOD_PHASES = 4;
 
-		/**
-		 * @brief A draped placement's root transform is compared every DRAPE_CHECK_PHASES frames (each frame takes a
-		 * different share: KDEN has some 3,600, and a lookup each every frame cost most of a millisecond). A move counts
-		 * as settled when two checks in a row see the same transform, and only then are its draped batches cut along the
-		 * terrain again; while it is dragged they move rigidly with it (a new mesh every frame would churn the geometry
-		 * buffer).
-		 */
-		constexpr uint32_t DRAPE_CHECK_PHASES = 8;
-
 		/*
 		 * @brief Main-thread time a frame spends draping placements: an airport's thousands spread over frames. Checked
 		 * before each placement, so a frame drapes at least one and the last may run a little over (one placement is a few
@@ -116,17 +108,14 @@ namespace SceneryEditorX::XPlane
 		/**
 		 * @brief On the root of a placement whose object has static ATTR_draped batches: those batches follow the terrain
 		 * like X-Plane drapes them, cut along its triangles for this placement (TerrainSurface::DrapePlaced) and drawn from
-		 * a mesh in object space. Draped again when the terrain is reloaded and once a move has settled (rigid while the
-		 * placement moves); without terrain, or for a batch that reaches off it, the asset's flat copy draws. A component
-		 * of its own, so only these placements (KDEN: 3,609 of 130,800) are visited for it and the per-frame loop over every
-		 * placement doesn't carry its state.
+		 * a mesh in object space. Draped again when the terrain is reloaded and once a move has settled (DrapeSchedule:
+		 * rigid while the placement moves); without terrain, or for a batch that reaches off it, the asset's flat copy
+		 * draws. A component of its own, so only these placements (KDEN: 3,609 of 130,800) are visited for it and the
+		 * per-frame loop over every placement doesn't carry its state.
 		 */
 		struct XPlaneDrapeComponent
 		{
-			bool done = false;						// Draped for transform, terrain and the placement's placedOnTerrain (or left flat)
-			uint64_t terrain = 0;					// SceneTerrain::GetGeneration() it was draped for
-			std::array<float, 10> transform = {};	// Root translation, rotation (w x y z), scale it was draped for
-			std::array<float, 10> seen = {};		// The root's transform at its last check (DRAPE_CHECK_PHASES)
+			DrapeSchedule schedule;					// When to drape again (terrain generation: SceneTerrain::GetGeneration())
 			Ref<Mesh> mesh;							// The chunk its pieces are in (shared by the placements draped that frame); null while flat
 			std::vector<uint32_t> batches;			// Batches drawing from mesh (ObjectAsset batch indices)
 		};
@@ -139,21 +128,21 @@ namespace SceneryEditorX::XPlane
 		struct DrapeFrame
 		{
 			uint64_t terrainGeneration = 0;
-			uint32_t phase = 0;				// Placements whose transform is compared this frame (DRAPE_CHECK_PHASES)
+			uint64_t frame = 0;				// Picks the placements whose transform is checked (DrapeSchedule::IsCheckFrame)
 			uint32_t placements = 0;		// Draped this frame
 			uint32_t waiting = 0;			// Due but left for the next frame (budget spent)
 			double milliseconds = 0.0;		// Spent draping this frame
 
+			// Kept from the drape loop to FinishDrapes(): references and entity handles, not pointers into the registry's
+			// storage, so adding or removing components in between can't leave them dangling
 			Ref<Mesh> chunk;				// This frame's pieces
 			struct Piece
 			{
-				Renderable *renderable = nullptr;
+				Ref<Renderable> renderable;
 				uint32_t subMesh = 0;
 			};
-			// Pointers into the registry's storage, kept from the drape loop to FinishDrapes() in the same Tick(): valid
-			// because nothing adds or removes Renderable or XPlaneDrapeComponent components (or entities) in between.
 			std::vector<Piece> pieces;		// Batch entities to point at the chunk once it is built
-			std::vector<std::pair<XPlaneDrapeComponent *, bool>> draped;	// Placements draped, and whether any batch went into the chunk
+			std::vector<std::pair<entt::entity, bool>> draped;	// Placement roots draped, and whether any batch went into the chunk
 		};
 		struct DrapeBurst
 		{
@@ -912,8 +901,8 @@ namespace SceneryEditorX::XPlane
 			}
 		}
 
-		/* @brief A root transform as compared between frames: translation, rotation (w x y z), scale. */
-		std::array<float, 10> PackTransform(const TransformComponent &transform)
+		/* @brief A root transform as compared between checks: translation, rotation (w x y z), scale. */
+		DrapeTransform PackTransform(const TransformComponent &transform)
 		{
 			const Quat rotation = transform.GetRotation();
 			return { transform.translation.x, transform.translation.y, transform.translation.z, rotation.w, rotation.x, rotation.y, rotation.z,
@@ -930,8 +919,8 @@ namespace SceneryEditorX::XPlane
 		 * (ObjectHeight, HeightOf): moving a parent (an airport moved as a whole) carries the drapes rigidly, as it carries
 		 * the objects' heights.
 		 */
-		void DrapeBatches(const XPlaneObjectComponent &object, XPlaneDrapeComponent &drape, const TransformComponent &transform, DrapeFrame &frame,
-			DrapeBurst &burst)
+		void DrapeBatches(const entt::entity rootHandle, const XPlaneObjectComponent &object, XPlaneDrapeComponent &drape, const TransformComponent &transform,
+			DrapeFrame &frame, DrapeBurst &burst)
 		{
 			static const TerrainSurface noTerrain;
 			const TerrainSurface &surface = object.placedOnTerrain ? SceneTerrain::GetSurface() : noTerrain;
@@ -1002,42 +991,34 @@ namespace SceneryEditorX::XPlane
 				}
 				uint32_t subMesh = 0;
 				frame.chunk->AddGeometry(vertices, indices, false, &subMesh);
-				frame.pieces.push_back({ renderable, subMesh });
+				frame.pieces.push_back({ Ref<Renderable>(renderable), subMesh });
 				draped.push_back(i);
 				++burst.batches;
 				burst.triangles += static_cast<uint32_t>(indices.size() / 3);
 			}
 
-			frame.draped.emplace_back(&drape, !draped.empty());
+			frame.draped.emplace_back(rootHandle, !draped.empty());
 			drape.batches = std::move(draped);
 		}
 
 		/**
-		 * @brief Keeps a placement's draped batches on the terrain: drapes them once, again when the terrain changed (or
-		 * whether it stands on it, SetOnTerrain), and again when a move has settled (DRAPE_CHECK_PHASES). Due work waits
-		 * for the next frame once this frame's DRAPE_BUDGET_MS is spent.
+		 * @brief Keeps a placement's draped batches on the terrain (DrapeSchedule: once, again when the terrain changed or
+		 * whether it stands on it, SetOnTerrain, and again when a move has settled). Due work waits for the next frame once
+		 * this frame's DRAPE_BUDGET_MS is spent.
 		 */
 		void UpdateDrapes(entt::registry &registry, const entt::entity rootHandle, XPlaneDrapeComponent &drape, DrapeFrame &frame)
 		{
-			const bool terrainChanged = !drape.done || drape.terrain != frame.terrainGeneration;
-			// The phase comes from the entity, not the view's order: adding or removing drape components reorders the view
-			const bool inPhase = static_cast<uint32_t>(entt::to_integral(rootHandle)) % DRAPE_CHECK_PHASES == frame.phase;
-			if (!terrainChanged && !inPhase)
+			// The check frame comes from the entity, not the view's order: adding or removing drape components reorders the view
+			const bool checkFrame = DrapeSchedule::IsCheckFrame(entt::to_integral(rootHandle), frame.frame);
+			if (!drape.schedule.NeedsTransform(frame.terrainGeneration, checkFrame))
 				return;
 
 			const TransformComponent *transform = registry.try_get<TransformComponent>(rootHandle);
 			if (!transform)
 				return;
 
-			const std::array<float, 10> current = PackTransform(*transform);
-			bool settled = false;
-			if (inPhase)
-			{
-				settled = current == drape.seen;
-				drape.seen = current;
-			}
-			const bool settledElsewhere = drape.done && settled && current != drape.transform;
-			if (!terrainChanged && !settledElsewhere)
+			const DrapeTransform current = PackTransform(*transform);
+			if (!drape.schedule.Due(frame.terrainGeneration, checkFrame, current))
 				return;
 
 			const XPlaneObjectComponent *object = registry.try_get<XPlaneObjectComponent>(rootHandle);
@@ -1051,16 +1032,14 @@ namespace SceneryEditorX::XPlane
 			}
 
 			const auto start = std::chrono::steady_clock::now();
-			DrapeBatches(*object, drape, *transform, frame, s_DrapeBurst);
+			DrapeBatches(rootHandle, *object, drape, *transform, frame, s_DrapeBurst);
 			frame.milliseconds += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-			drape.done = true;
-			drape.terrain = frame.terrainGeneration;
-			drape.transform = current;
+			drape.schedule.Draped(frame.terrainGeneration, current);
 			++frame.placements;
 		}
 
 		/* @brief Builds this frame's chunk and points the draped batches at it; their previous pieces go with their meshes. */
-		void FinishDrapes(DrapeFrame &frame)
+		void FinishDrapes(entt::registry &registry, DrapeFrame &frame)
 		{
 			if (frame.chunk)
 			{
@@ -1070,8 +1049,12 @@ namespace SceneryEditorX::XPlane
 			}
 			for (const DrapeFrame::Piece &piece : frame.pieces)
 				piece.renderable->SetMesh(frame.chunk.Get(), piece.subMesh);
-			for (const auto &[drape, any] : frame.draped)
-				drape->mesh = any ? frame.chunk : Ref<Mesh>(); // a previous chunk goes once none of its placements use it
+			for (const auto &[rootHandle, any] : frame.draped)
+			{
+				// A previous chunk goes once none of its placements use it (~Mesh gives its geometry buffer ranges back)
+				if (XPlaneDrapeComponent *drape = registry.valid(rootHandle) ? registry.try_get<XPlaneDrapeComponent>(rootHandle) : nullptr)
+					drape->mesh = any ? frame.chunk : Ref<Mesh>();
+			}
 		}
 	}
 
@@ -1233,13 +1216,13 @@ namespace SceneryEditorX::XPlane
 		// ATTR_draped geometry on the terrain: only the placements that have some
 		DrapeFrame drapes;
 		drapes.terrainGeneration = SceneTerrain::GetGeneration();
-		drapes.phase = static_cast<uint32_t>(s_TickCount % DRAPE_CHECK_PHASES);
+		drapes.frame = s_TickCount;
 		{
 			SEDX_PERF_SCOPE("Objects: drapes");
 			auto drapeView = registry->view<XPlaneDrapeComponent>();
 			for (const entt::entity rootHandle : drapeView)
 				UpdateDrapes(*registry, rootHandle, drapeView.get<XPlaneDrapeComponent>(rootHandle), drapes);
-			FinishDrapes(drapes);
+			FinishDrapes(*registry, drapes);
 		}
 		Perf::SetCounter("objects draped", drapes.placements);
 
@@ -1376,7 +1359,7 @@ namespace SceneryEditorX::XPlane
 			return;
 		object->placedOnTerrain = onTerrain;
 		if (XPlaneDrapeComponent *drape = registry->try_get<XPlaneDrapeComponent>(rootHandle))
-			drape->done = false; // draped again (or flat) with the next Tick()
+			drape->schedule.Invalidate(); // draped again (or flat) with the next Tick()
 	}
 
 	void SceneObjects::Shutdown()

@@ -16,6 +16,7 @@
 #include <SceneryEditorX/filesystem/vfs.h>
 #include <SceneryEditorX/xplane/xp_7z.h>
 #include <SceneryEditorX/xplane/xp_assets.h>
+#include <SceneryEditorX/xplane/xp_drape_schedule.h>
 #include <SceneryEditorX/xplane/xp_dsf.h>
 #include <SceneryEditorX/xplane/xp_library.h>
 #include <SceneryEditorX/xplane/xp_terrain.h>
@@ -978,6 +979,77 @@ TEST_CASE("Draped object geometry takes the terrain's normal under a non-uniform
 		CHECK_THAT(n[0], WithinAbs(slopeNormal[0], 1e-4));
 		CHECK_THAT(n[1], WithinAbs(slopeNormal[1], 1e-4));
 		CHECK_THAT(n[2], WithinAbs(slopeNormal[2], 1e-4));
+	}
+}
+
+TEST_CASE("Draped placements are draped once, when the terrain changes and when a move has settled", "[terrain]")
+{
+	const DrapeTransform at = { 10.0f, 2.0f, -5.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f };
+	const auto movedTo = [&](const float x)
+	{
+		DrapeTransform t = at;
+		t[0] = x;
+		return t;
+	};
+
+	DrapeSchedule schedule;
+	constexpr uint64_t terrain = 7;
+
+	SECTION("Every placement is checked once in CHECK_PHASES frames, whatever its id")
+	{
+		for (uint64_t id = 0; id < 40; ++id)
+		{
+			int checks = 0;
+			for (uint64_t frame = 100; frame < 100 + DrapeSchedule::CHECK_PHASES; ++frame)
+				checks += DrapeSchedule::IsCheckFrame(id, frame) ? 1 : 0;
+			CHECK(checks == 1);
+		}
+	}
+
+	SECTION("Draped once, then left alone")
+	{
+		CHECK(schedule.NeedsTransform(terrain, false));	// never draped: due on any frame
+		REQUIRE(schedule.Due(terrain, false, at));
+		schedule.Draped(terrain, at);
+		CHECK_FALSE(schedule.NeedsTransform(terrain, false));	// not a check frame: the transform isn't even read
+		CHECK_FALSE(schedule.Due(terrain, true, at));
+		CHECK_FALSE(schedule.Due(terrain, true, at));
+	}
+
+	SECTION("A dragged placement is draped again only once it stands still")
+	{
+		REQUIRE(schedule.Due(terrain, false, at));
+		schedule.Draped(terrain, at);
+		CHECK_FALSE(schedule.Due(terrain, true, at));
+
+		// Moving between checks: never settled
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(11.0f)));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(12.0f)));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(13.0f)));
+		// Frames between checks don't count
+		CHECK_FALSE(schedule.Due(terrain, false, movedTo(13.0f)));
+		// The same transform at two checks in a row: settled
+		REQUIRE(schedule.Due(terrain, true, movedTo(13.0f)));
+		schedule.Draped(terrain, movedTo(13.0f));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(13.0f)));
+
+		// Moved and back between two checks: nothing to do
+		CHECK_FALSE(schedule.Due(terrain, false, movedTo(20.0f)));
+		CHECK_FALSE(schedule.Due(terrain, true, movedTo(13.0f)));
+	}
+
+	SECTION("The terrain changing, or whether the placement stands on it, drapes it again at once")
+	{
+		REQUIRE(schedule.Due(terrain, false, at));
+		schedule.Draped(terrain, at);
+		CHECK(schedule.NeedsTransform(terrain + 1, false));
+		REQUIRE(schedule.Due(terrain + 1, false, at));
+		schedule.Draped(terrain + 1, at);
+		CHECK_FALSE(schedule.Due(terrain + 1, true, at));
+
+		schedule.Invalidate();
+		CHECK(schedule.NeedsTransform(terrain + 1, false));
+		CHECK(schedule.Due(terrain + 1, false, at));
 	}
 }
 

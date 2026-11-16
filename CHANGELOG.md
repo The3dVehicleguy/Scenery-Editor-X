@@ -75,7 +75,7 @@ versions.
   a moved object is draped again once it stands still for a few frames, and stays rigid while it is dragged. Animated
   draped geometry, a batch that reaches off the terrain, and one larger than 65,536 indices (some 21,000 triangles,
   0.2.104.605) still draw flat. (0.2.102.603; the terrain's normal kept on objects scaled unevenly, and moved objects
-  checked on a steady schedule, 0.2.103.604)
+  checked on a steady schedule, 0.2.103.604; that schedule unit-tested, `xp_drape_schedule.h`, 0.2.105.606)
 - The ground no longer turns grey within 700 m of the camera: zooming in on an airport showed a flat grey disc where
   the terrain should be (grass, fields, towns), moving with the camera, with only pavements and objects drawn on it. The
   depth passes took the alpha of an X-Plane `.ter` base texture for coverage and cut the terrain out within 700 m (the
