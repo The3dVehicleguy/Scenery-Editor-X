@@ -150,9 +150,13 @@ namespace SceneryEditorX::XPlane
 		 * markers. Reverse-Z depth keeps millimeters apart out to a few kilometers. Transparent (surface 15) runways,
 		 * pavement and helipads sit just above the boundary, under every DSF group: X-Plane draws nothing for them, so
 		 * the pack's own art (its orthophotos and pavement polygons) must cover their editing tint.
+		 * Nothing sits at 0: that is the terrain's own surface, and the g-buffer pass tests drapes against the terrain's
+		 * depth, so a drape in the terrain's plane is left to rounding and the terrain covers stretches of it (the boundary
+		 * until 0.2.101.602). A millimeter is about ten times the rounding of positions a kilometer out.
 		 */
-		constexpr float HEIGHT_BOUNDARY = 0.00f;
+		constexpr float HEIGHT_BOUNDARY = 0.001f;
 		constexpr float HEIGHT_TRANSPARENT = 0.002f;
+		static_assert(HEIGHT_BOUNDARY > 0.0f && HEIGHT_TRANSPARENT - 0.0005f > HEIGHT_BOUNDARY, "Drapes sit above the terrain, the boundary lowest");
 		constexpr float HEIGHT_PAVEMENT = 0.03f;
 		constexpr float HEIGHT_RUNWAY_ABOVE_PAVEMENT = 0.02f;
 		constexpr float HEIGHT_HELIPAD_EXTRA = 0.01f;

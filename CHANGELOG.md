@@ -67,6 +67,11 @@ versions.
 
 ### Fixed
 
+- The airport boundary (the orange band the editor draws along an apt.dat `130` boundary) is no longer covered by the
+  terrain over parts of its length. It was drawn at the terrain's own height, so whether the terrain or the band won the
+  depth test came down to rounding (at KPVD the stretch beside the service road south-west of the tower was hidden from
+  far away, and up close too once the terrain was back in the depth buffer within 700 m). It now sits 1 mm above the
+  terrain, still the lowest of the airport's drapes (`HEIGHT_BOUNDARY`). (0.2.101.602)
 - The ground no longer turns grey within 700 m of the camera: zooming in on an airport showed a flat grey disc where
   the terrain should be (grass, fields, towns), moving with the camera, with only pavements and objects drawn on it. The
   depth passes took the alpha of an X-Plane `.ter` base texture for coverage and cut the terrain out within 700 m (the
