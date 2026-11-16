@@ -158,7 +158,12 @@ namespace SceneryEditorX::XPlane
 		constexpr float HEIGHT_TRANSPARENT = 0.002f;
 		static_assert(HEIGHT_BOUNDARY > 0.0f && HEIGHT_TRANSPARENT - 0.0005f > HEIGHT_BOUNDARY, "Drapes sit above the terrain, the boundary lowest");
 		constexpr float HEIGHT_PAVEMENT = 0.03f;
+		constexpr float PAVEMENT_STEP_MAX = 0.003f;		// apt.dat pavement rows this far apart at most (first on top) ...
+		constexpr float PAVEMENT_STACK_MAX = 0.3f;		// ... and all of them within this
 		constexpr float HEIGHT_RUNWAY_ABOVE_PAVEMENT = 0.02f;
+		// So the runway height tops out under 0.4 m, where the 4 um rank steps of GetRunwaySurfaceLift (what decides crossing
+		// runways) stay apart in float; OverlayTests checks them on 0.4 m
+		static_assert(HEIGHT_PAVEMENT + PAVEMENT_STACK_MAX + HEIGHT_RUNWAY_ABOVE_PAVEMENT <= 0.4f, "Runway rank lifts need the runway height under 0.4 m");
 		constexpr float HEIGHT_HELIPAD_EXTRA = 0.01f;
 		constexpr float HEIGHT_LINES_EXTRA = 0.03f;
 		constexpr float HEIGHT_LIGHTS_EXTRA = 0.04f;
@@ -685,7 +690,7 @@ namespace SceneryEditorX::XPlane
 
 			// Pavement: first in the file draws on top, so later polygons sit lower.
 			const size_t pavementCount = airport.pavements.size();
-			const float pavementStep = pavementCount > 1 ? std::min(0.003f, 0.3f / static_cast<float>(pavementCount)) : 0.0f;
+			const float pavementStep = pavementCount > 1 ? std::min(PAVEMENT_STEP_MAX, PAVEMENT_STACK_MAX / static_cast<float>(pavementCount)) : 0.0f;
 			const float pavementTop = HEIGHT_PAVEMENT + pavementStep * static_cast<float>(pavementCount);
 			const float runwayHeight = pavementTop + HEIGHT_RUNWAY_ABOVE_PAVEMENT;
 			const float lineHeight = runwayHeight + HEIGHT_LINES_EXTRA;

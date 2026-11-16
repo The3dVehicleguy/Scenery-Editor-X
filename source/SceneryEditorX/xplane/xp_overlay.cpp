@@ -931,11 +931,29 @@ namespace SceneryEditorX::XPlane
 		if (std::abs(twiceArea) < 2.0 * CUT_MIN_AREA)
 			return false;
 		const double winding = twiceArea > 0.0 ? 1.0 : -1.0;
-		const auto inside = [&polygon, corners, winding](const size_t edge, const double x, const double z)	// > 0: inside of the edge
+
+		// Each edge's start and unit direction (times the winding), once: the signed distance inward is then a cross product
+		struct Edge
 		{
-			const Point2 &a = polygon[edge], &b = polygon[(edge + 1) % corners];
+			Point2 start;
+			double dx = 0.0, dz = 0.0;		// Zero for a repeated corner: no side
+		};
+		std::vector<Edge> edges(corners);
+		for (size_t k = 0; k < corners; ++k)
+		{
+			const Point2 &a = polygon[k], &b = polygon[(k + 1) % corners];
 			const double length = std::hypot(b.x - a.x, b.z - a.z);
-			return length > 0.0 ? winding * ((b.x - a.x) * (z - a.z) - (b.z - a.z) * (x - a.x)) / length : 0.0;
+			edges[k].start = a;
+			if (length > 0.0)
+			{
+				edges[k].dx = winding * (b.x - a.x) / length;
+				edges[k].dz = winding * (b.z - a.z) / length;
+			}
+		}
+		const auto inside = [&edges](const size_t edge, const double x, const double z)	// Meters, > 0: inside of the edge
+		{
+			const Edge &e = edges[edge];
+			return e.dx * (z - e.start.z) - e.dz * (x - e.start.x);
 		};
 
 		std::vector<OverlayVertex> vertices;
