@@ -1684,6 +1684,16 @@ TEST_CASE("Crossing runways: the more important runway goes on through the inter
 		CHECK(cut.bounds.minX == Catch::Approx(0.0));
 		CHECK(cut.bounds.maxX == Catch::Approx(10.0));
 
+		// Repeated corners (doubled, or the ring closed on its first corner) cut the same: a zero-length edge has no inside
+		OverlayMesh doubled = mesh;
+		REQUIRE(CutOutConvex(doubled, { { 4.0, -5.0 }, { 4.0, 15.0 }, { 4.0, 15.0 }, { 6.0, 15.0 }, { 6.0, -5.0 } }));
+		CHECK(area(doubled) == Catch::Approx(80.0).margin(1e-4));
+		OverlayMesh closed = mesh;
+		REQUIRE(CutOutConvex(closed, { { 4.0, -5.0 }, { 4.0, 15.0 }, { 6.0, 15.0 }, { 6.0, -5.0 }, { 4.0, -5.0 } }));
+		CHECK(area(closed) == Catch::Approx(80.0).margin(1e-4));
+		OverlayMesh collapsed = mesh;
+		CHECK_FALSE(CutOutConvex(collapsed, { { 4.0, -5.0 }, { 4.0, -5.0 }, { 6.0, 15.0 }, { 6.0, 15.0 } }));	// A line: no area
+
 		// A diamond in the middle (a cut that is not axis-aligned): its area goes, the corners stay
 		OverlayMesh diamond = mesh;
 		REQUIRE(CutOutConvex(diamond, { { 5.0, 3.0 }, { 7.0, 5.0 }, { 5.0, 7.0 }, { 3.0, 5.0 } }));

@@ -915,8 +915,23 @@ namespace SceneryEditorX::XPlane
 
 	bool CutOutConvex(OverlayMesh &mesh, const std::vector<Point2> &polygon)
 	{
-		const size_t corners = polygon.size();
-		if (corners < 3 || mesh.indices.size() < 3)
+		if (polygon.size() < 3 || mesh.indices.size() < 3)
+			return false;
+
+		// Its corners without repeats (the last against the first too): a zero-length edge has no inside, and every point
+		// would read as on it, outside the cut
+		std::vector<Point2> ring;
+		ring.reserve(polygon.size());
+		const auto apart = [](const Point2 &a, const Point2 &b) { return std::hypot(b.x - a.x, b.z - a.z) > CUT_EPSILON; };
+		for (const Point2 &point : polygon)
+		{
+			if (ring.empty() || apart(ring.back(), point))
+				ring.push_back(point);
+		}
+		while (ring.size() > 1 && !apart(ring.back(), ring.front()))
+			ring.pop_back();
+		const size_t corners = ring.size();
+		if (corners < 3)
 			return false;
 
 		// Its winding, so "inside" is the same side of every edge whichever way the corners run
@@ -924,7 +939,7 @@ namespace SceneryEditorX::XPlane
 		Bounds2 cutBounds;
 		for (size_t k = 0; k < corners; ++k)
 		{
-			const Point2 &a = polygon[k], &b = polygon[(k + 1) % corners];
+			const Point2 &a = ring[k], &b = ring[(k + 1) % corners];
 			twiceArea += a.x * b.z - b.x * a.z;
 			cutBounds.Add(a);
 		}
@@ -940,19 +955,16 @@ namespace SceneryEditorX::XPlane
 		struct Edge
 		{
 			Point2 start;
-			double dx = 0.0, dz = 0.0;		// Zero for a repeated corner: no side
+			double dx = 0.0, dz = 0.0;
 		};
 		std::vector<Edge> edges(corners);
 		for (size_t k = 0; k < corners; ++k)
 		{
-			const Point2 &a = polygon[k], &b = polygon[(k + 1) % corners];
-			const double length = std::hypot(b.x - a.x, b.z - a.z);
+			const Point2 &a = ring[k], &b = ring[(k + 1) % corners];
+			const double length = std::hypot(b.x - a.x, b.z - a.z);	// Over CUT_EPSILON: repeats are gone
 			edges[k].start = a;
-			if (length > 0.0)
-			{
-				edges[k].dx = winding * (b.x - a.x) / length;
-				edges[k].dz = winding * (b.z - a.z) / length;
-			}
+			edges[k].dx = winding * (b.x - a.x) / length;
+			edges[k].dz = winding * (b.z - a.z) / length;
 		}
 		const auto inside = [&edges](const size_t edge, const double x, const double z)	// Meters, > 0: inside of the edge
 		{
