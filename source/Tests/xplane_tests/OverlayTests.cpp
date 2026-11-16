@@ -1582,6 +1582,20 @@ TEST_CASE("Crossing runways: the more important runway goes on through the inter
 		CHECK(GetRunwayRanks({ runway(1, 5, 1), runway(1, 2, 2) }) == std::vector<uint32_t>{ 1, 0 });		// UK precision
 		CHECK(GetRunwayRanks({ runway(1, 6, 6), runway(1, 7, 1) }) == std::vector<uint32_t>{ 0, 1 });		// EASA
 		CHECK(GetRunwayRanks({ runway(1, 1, 1), runway(1, 0, 0) }) == std::vector<uint32_t>{ 1, 0 });		// Visual over none
+		// Every pair of the apt.dat marking codes 0..7 (none, visual, then non-precision / precision for FAA, UK and EASA):
+		// the higher class on top, the first row on a tie
+		{
+			constexpr int CLASS_OF[8] = { 0, 1, 2, 3, 2, 3, 2, 3 };
+			for (int a = 0; a < 8; ++a)
+			{
+				for (int b = 0; b < 8; ++b)
+				{
+					const std::vector<uint32_t> expected = CLASS_OF[a] >= CLASS_OF[b] ? std::vector<uint32_t>{ 1, 0 } : std::vector<uint32_t>{ 0, 1 };
+					if (GetRunwayRanks({ runway(1, a, a), runway(1, b, b) }) != expected)
+						FAIL_CHECK("marking codes " << a << " (first row) and " << b << " ranked the wrong way round");
+				}
+			}
+		}
 		// Equal ones: the first row on top
 		CHECK(GetRunwayRanks({ runway(1, 2, 2), runway(2, 2, 0), runway(1, 0, 2) }) == std::vector<uint32_t>{ 2, 1, 0 });
 		// Paved over unpaved whatever the codes; transparent ones (they draw nothing) at the bottom
