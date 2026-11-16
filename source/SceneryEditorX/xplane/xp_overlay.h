@@ -467,8 +467,11 @@ namespace SceneryEditorX::XPlane
 
 	/**
 	 * @brief How far a runway's surface sits above the airport's runway height for its rank (GetRunwayRanks): up to
-	 * 0.1 mm a rank and under 0.8 mm in all, so the top runway's surface covers the others where they cross and every
-	 * runway stays under the DSF "runways" layer group. 0 for rank 0.
+	 * 0.1 mm a rank and under 0.8 mm in all (up to 200 runways), so the top runway's surface covers the others where they
+	 * cross and every runway stays under the DSF "runways" layer group. 0 for rank 0.
+	 * The crossing is decided by the drape order taken from this height before draping (airport-relative, under 0.4 m),
+	 * not by depth: drapes don't depth-test each other in the g-buffer pass. So a rank step is never under 4 um, twice
+	 * the drape order's 2 um resolution (Renderable::MakeDrapeOrder), whatever the airport's elevation.
 	 */
 	float GetRunwaySurfaceLift(uint32_t rank, size_t runways);
 

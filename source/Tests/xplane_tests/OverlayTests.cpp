@@ -1596,6 +1596,20 @@ TEST_CASE("Crossing runways: the more important runway goes on through the inter
 		CHECK(GetRunwaySurfaceLift(11, 12) == Catch::Approx(0.0008f));
 		CHECK(GetRunwaySurfaceLift(39, 40) <= 0.0008f + 1e-7f);
 		CHECK(GetRunwaySurfaceLift(39, 40) > GetRunwaySurfaceLift(38, 40));
+
+		// The drape order that decides a crossing is taken from these heights before draping (airport-relative: the
+		// runway height tops out near 0.35 m) at 2 um resolution, not from depth. Every rank step stays at least 4 um
+		// there, in float, so neighbouring ranks never share an order, for any runway count
+		for (const size_t runways : { size_t{ 2 }, size_t{ 12 }, size_t{ 200 }, size_t{ 1000 } })
+		{
+			const float top = 0.4f;
+			for (uint32_t rank = 1; rank < runways; ++rank)
+			{
+				const float step = (top + GetRunwaySurfaceLift(rank, runways)) - (top + GetRunwaySurfaceLift(rank - 1, runways));
+				if (step < 3.9e-6f)
+					FAIL_CHECK("rank " << rank << " of " << runways << " is only " << step << " m above the one below");
+			}
+		}
 	}
 
 	SECTION("Cutting a convex area out of a mesh keeps the rest, its UVs and its winding")

@@ -811,6 +811,7 @@ namespace SceneryEditorX::XPlane
 	{
 		constexpr float RUNWAY_RANK_STEP = 0.0001f;		// Surface lift per runway rank (GetRunwaySurfaceLift)
 		constexpr float RUNWAY_RANK_SPAN = 0.0008f;		// ... and in all: under the DSF "runways" group's lowest offset, 1 mm up
+		constexpr float RUNWAY_RANK_MIN_STEP = 0.000004f;	// ... but never under twice the drape order's 2 um (Renderable::MakeDrapeOrder)
 		constexpr double CUT_EPSILON = 1.0e-6;			// Meters: a vertex this close to a cutting edge lies on it
 		constexpr double CUT_MIN_AREA = 1.0e-8;			// Square meters: cut pieces smaller than this are slivers, dropped
 
@@ -903,7 +904,7 @@ namespace SceneryEditorX::XPlane
 	{
 		if (runways < 2)
 			return 0.0f;
-		const float step = std::min(RUNWAY_RANK_STEP, RUNWAY_RANK_SPAN / static_cast<float>(runways - 1));
+		const float step = std::max(RUNWAY_RANK_MIN_STEP, std::min(RUNWAY_RANK_STEP, RUNWAY_RANK_SPAN / static_cast<float>(runways - 1)));
 		return step * static_cast<float>(std::min<size_t>(rank, runways - 1));
 	}
 
