@@ -67,6 +67,12 @@ versions.
 
 ### Fixed
 
+- The ground no longer turns grey within 700 m of the camera: zooming in on an airport showed a flat grey disc where
+  the terrain should be (grass, fields, towns), moving with the camera, with only pavements and objects drawn on it. The
+  depth passes took the alpha of an X-Plane `.ter` base texture for coverage and cut the terrain out within 700 m (the
+  distance up to which cut-out texels are tested), so those pixels were lit as sky. That alpha keys the terrain's detail
+  decals; terrain is no longer treated as alpha-tested (`MaterialAsset::IsAlphaTested`, `depth_prepass.slang`,
+  `depth_light.slang`) and now also casts its full shadow. (#96, 0.2.100.601)
 - The viewport camera (`MainCamera`) is no longer listed in the OUTLINER and can't be deleted: deleting it there, or
   with Del while it was selected, left a camera nothing could move until the editor restarted. `EditorScene::Destroy`
   refuses it and returns whether it destroyed anything. (#80, 0.2.84.585; Del with only the camera selected deletes
