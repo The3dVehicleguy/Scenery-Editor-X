@@ -951,6 +951,73 @@ namespace SceneryEditorX::XPlane
 		return Drape(mesh.vertices, mesh.indices, clip);
 	}
 
+	bool TerrainSurface::DrapePlaced(std::vector<OverlayVertex> &vertices, std::vector<uint32_t> &indices, const double axes[3][3], const double origin[3]) const
+	{
+		if (IsEmpty() || vertices.empty() || indices.size() < 3)
+			return false;
+
+		const double (*a)[3] = axes;
+		const double det = a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) +
+						   a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+		if (std::abs(det) < 1e-12)
+			return false;
+		// The inverse (adjugate over the determinant) takes the pieces back
+		const double s = 1.0 / det;
+		const double inv[3][3] = {
+			{ (a[1][1] * a[2][2] - a[1][2] * a[2][1]) * s, (a[0][2] * a[2][1] - a[0][1] * a[2][2]) * s, (a[0][1] * a[1][2] - a[0][2] * a[1][1]) * s },
+			{ (a[1][2] * a[2][0] - a[1][0] * a[2][2]) * s, (a[0][0] * a[2][2] - a[0][2] * a[2][0]) * s, (a[0][2] * a[1][0] - a[0][0] * a[1][2]) * s },
+			{ (a[1][0] * a[2][1] - a[1][1] * a[2][0]) * s, (a[0][1] * a[2][0] - a[0][0] * a[2][1]) * s, (a[0][0] * a[1][1] - a[0][1] * a[1][0]) * s } };
+
+		// p * m for a row vector; normals are only turned (and scaled), then normalized
+		const auto multiply = [](const double (*m)[3], const double x, const double y, const double z, double out[3])
+		{
+			for (int j = 0; j < 3; ++j)
+				out[j] = x * m[0][j] + y * m[1][j] + z * m[2][j];
+		};
+		const auto setNormal = [](OverlayVertex &vertex, const double n[3])
+		{
+			const double length = std::sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]);
+			vertex.nx = length > 1e-12 ? static_cast<float>(n[0] / length) : 0.0f;
+			vertex.ny = length > 1e-12 ? static_cast<float>(n[1] / length) : 1.0f;
+			vertex.nz = length > 1e-12 ? static_cast<float>(n[2] / length) : 0.0f;
+		};
+
+		// Into the terrain's frame, every vertex over the terrain; y is the height above the object's origin
+		std::vector<OverlayVertex> placed(vertices);
+		for (OverlayVertex &vertex : placed)
+		{
+			double p[3], n[3];
+			multiply(a, vertex.x, vertex.y, vertex.z, p);
+			multiply(a, vertex.nx, vertex.ny, vertex.nz, n);
+			const double x = origin[0] + p[0], z = origin[2] + p[2];
+			double bary[3];
+			if (Locate(x, z, bary) == NONE)
+				return false;
+			vertex.x = static_cast<float>(x);
+			vertex.y = static_cast<float>(p[1]);
+			vertex.z = static_cast<float>(z);
+			setNormal(vertex, n);
+		}
+
+		std::vector<uint32_t> pieces(indices);
+		Drape(placed, pieces);
+
+		// Back into object space
+		for (OverlayVertex &vertex : placed)
+		{
+			double p[3], n[3];
+			multiply(inv, vertex.x - origin[0], vertex.y - origin[1], vertex.z - origin[2], p);
+			multiply(inv, vertex.nx, vertex.ny, vertex.nz, n);
+			vertex.x = static_cast<float>(p[0]);
+			vertex.y = static_cast<float>(p[1]);
+			vertex.z = static_cast<float>(p[2]);
+			setNormal(vertex, n);
+		}
+		vertices.swap(placed);
+		indices.swap(pieces);
+		return true;
+	}
+
 	void TerrainSurface::Lift(std::vector<OverlayVertex> &vertices) const
 	{
 		if (IsEmpty())

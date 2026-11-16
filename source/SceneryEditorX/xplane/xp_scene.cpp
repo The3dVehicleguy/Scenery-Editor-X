@@ -33,9 +33,11 @@
 #include "xp_datarefs.h"
 #include "xp_forest3d.h"
 #include "xp_library_manager.h"
+#include "xp_terrain_scene.h"
 #include "xp_weather_art.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <unordered_map>
@@ -94,6 +96,73 @@ namespace SceneryEditorX::XPlane
 		 * different share); the frame it stops, all of them. LOD bands span hundreds of meters, so the delay is invisible.
 		 */
 		constexpr uint32_t LOD_PHASES = 4;
+
+		/**
+		 * @brief A draped placement's root transform is compared every DRAPE_CHECK_PHASES frames (each frame takes a
+		 * different share: KDEN has some 3,600, and a lookup each every frame cost most of a millisecond). A move counts
+		 * as settled when two checks in a row see the same transform, and only then are its draped batches cut along the
+		 * terrain again; while it is dragged they move rigidly with it (a new mesh every frame would churn the geometry
+		 * buffer).
+		 */
+		constexpr uint32_t DRAPE_CHECK_PHASES = 8;
+
+		/* @brief Main-thread time a frame spends draping placements (at least one): an airport's thousands spread over frames. */
+		constexpr double DRAPE_BUDGET_MS = 2.0;
+
+		/**
+		 * @brief On the root of a placement whose object has static ATTR_draped batches: those batches follow the terrain
+		 * like X-Plane drapes them, cut along its triangles for this placement (TerrainSurface::DrapePlaced) and drawn from
+		 * a mesh in object space. Draped again when the terrain is reloaded and once a move has settled (rigid while the
+		 * placement moves); without terrain, or for a batch that reaches off it, the asset's flat copy draws. A component
+		 * of its own, so only these placements (KDEN: 3,609 of 130,800) are visited for it and the per-frame loop over every
+		 * placement doesn't carry its state.
+		 */
+		struct XPlaneDrapeComponent
+		{
+			bool done = false;						// Draped for transform, terrain and the placement's placedOnTerrain (or left flat)
+			uint64_t terrain = 0;					// SceneTerrain::GetGeneration() it was draped for
+			std::array<float, 10> transform = {};	// Root translation, rotation (w x y z), scale it was draped for
+			std::array<float, 10> seen = {};		// The root's transform at its last check (DRAPE_CHECK_PHASES)
+			Ref<Mesh> mesh;							// The chunk its pieces are in (shared by the placements draped that frame); null while flat
+			std::vector<uint32_t> batches;			// Batches drawing from mesh (ObjectAsset batch indices)
+		};
+
+		/**
+		 * @brief Draping done this frame. The pieces of every placement draped in a frame go into one chunk mesh, a sub-mesh
+		 * per batch: thousands of small meshes each draw dereferenced (mesh, sub-mesh list, LOD list, scattered in memory)
+		 * cost the render thread more than the triangles.
+		 */
+		struct DrapeFrame
+		{
+			uint64_t terrainGeneration = 0;
+			uint32_t phase = 0;				// Placements whose transform is compared this frame (DRAPE_CHECK_PHASES)
+			uint32_t index = 0;				// Draped placements seen so far this frame
+			uint32_t placements = 0;		// Draped this frame
+			uint32_t waiting = 0;			// Due but left for the next frame (budget spent)
+			double milliseconds = 0.0;		// Spent draping this frame
+
+			Ref<Mesh> chunk;				// This frame's pieces
+			struct Piece
+			{
+				Renderable *renderable = nullptr;
+				uint32_t subMesh = 0;
+			};
+			std::vector<Piece> pieces;		// Batch entities to point at the chunk once it is built
+			std::vector<std::pair<XPlaneDrapeComponent *, bool>> draped;	// Placements draped, and whether any batch went into the chunk
+		};
+		struct DrapeBurst
+		{
+			uint32_t placements = 0;
+			uint32_t batches = 0;			// Batches cut along the terrain
+			uint32_t flatBatches = 0;		// Batches left flat: they reach off the terrain
+			uint32_t triangles = 0;			// After cutting
+			uint32_t frames = 0;			// That draped some
+			uint32_t quietFrames = 0;		// Since the last that did
+			double milliseconds = 0.0;
+		};
+		DrapeBurst s_DrapeBurst;
+		/* @brief Frames without draping that end a burst (objects keep arriving for seconds while an airport loads). */
+		constexpr uint32_t DRAPE_BURST_QUIET_FRAMES = 120;
 
 		entt::registry *GetRegistry()
 		{
@@ -629,6 +698,10 @@ namespace SceneryEditorX::XPlane
 				SEDX_CORE_INFO_TAG(LOG_TAG, "Placed '{}' ({} batches, {} animation groups, {} lights){}", tag ? tag->pTag : asset->GetPath().filename().string(),
 					batches.size(), data.nodes.size(), lights.size(), component.virtualPath.empty() ? std::string() : " as " + component.virtualPath);
 			}
+
+			// Static draped batches are cut along the terrain by Tick() (UpdateDrapes); until then they draw flat
+			if (std::ranges::any_of(batches, [](const ObjectBatch &batch) { return !batch.drapeIndices.empty(); }))
+				registry.emplace_or_replace<XPlaneDrapeComponent>(rootHandle);
 		}
 
 		/* @brief Builds the placements whose asset has arrived and removes the ones whose asset failed to load. */
@@ -833,6 +906,166 @@ namespace SceneryEditorX::XPlane
 				++s_GroupsMoved;
 			}
 		}
+
+		/* @brief A root transform as compared between frames: translation, rotation (w x y z), scale. */
+		std::array<float, 10> PackTransform(const TransformComponent &transform)
+		{
+			const Quat rotation = transform.GetRotation();
+			return { transform.translation.x, transform.translation.y, transform.translation.z, rotation.w, rotation.x, rotation.y, rotation.z,
+					 transform.scale.x, transform.scale.y, transform.scale.z };
+		}
+
+		/**
+		 * @brief Cuts a placement's static draped batches along the terrain for its root's transform, the way X-Plane drapes
+		 * ATTR_draped geometry: each piece lies on the terrain triangle under it, lifted by the vertex's own height above the
+		 * object's origin. The pieces go back into object space (the batch entities keep their transforms, picking and the
+		 * gizmo work as before) and into this frame's chunk mesh; FinishDrapes() points the batch entities at it. A batch
+		 * that reaches off the terrain, and every batch without terrain, draws the asset's flat copy (set here). The root's
+		 * local transform is the placement in the terrain's frame, as placing took it for the object's height
+		 * (ObjectHeight, HeightOf).
+		 */
+		void DrapeBatches(const XPlaneObjectComponent &object, XPlaneDrapeComponent &drape, const TransformComponent &transform, DrapeFrame &frame,
+			DrapeBurst &burst)
+		{
+			static const TerrainSurface noTerrain;
+			const TerrainSurface &surface = object.placedOnTerrain ? SceneTerrain::GetSurface() : noTerrain;
+			const std::vector<ObjectBatch> &batches = object.asset->GetBatches();
+
+			// Object space -> terrain frame for row vectors: p' = p * axes + origin
+			const xMath::Matrix m = Entity::ComposeLocalMatrix(transform);
+			const double axes[3][3] = { { m.m00, m.m01, m.m02 }, { m.m10, m.m11, m.m12 }, { m.m20, m.m21, m.m22 } };
+			const double origin[3] = { m.m30, m.m31, m.m32 };
+
+			// Scratch storage reused across placements (main thread only)
+			static std::vector<OverlayVertex> pieces;
+			static std::vector<Vertex_PosTexNorTan> vertices;
+			static std::vector<uint32_t> indices;
+
+			std::vector<uint32_t> draped;
+			for (uint32_t i = 0; i < static_cast<uint32_t>(batches.size()) && i < object.batchStored.size(); ++i)
+			{
+				const ObjectBatch &batch = batches[i];
+				Entity *stored = object.batchStored[i];
+				Renderable *renderable = stored ? stored->GetComponent<Renderable>() : nullptr;
+				if (batch.drapeIndices.empty() || !renderable)
+					continue;
+				const bool wasDraped = std::ranges::find(drape.batches, i) != drape.batches.end();
+
+				bool cut = false;
+				if (!surface.IsEmpty())
+				{
+					pieces.clear();
+					pieces.reserve(batch.drapeVertices.size());
+					for (const Vertex_PosTexNorTan &v : batch.drapeVertices)
+					{
+						OverlayVertex &piece = pieces.emplace_back();
+						piece.x = v.pos[0];
+						piece.y = v.pos[1];
+						piece.z = v.pos[2];
+						piece.u = v.tex[0];
+						piece.v = v.tex[1];
+						piece.nx = v.nor[0];
+						piece.ny = v.nor[1];
+						piece.nz = v.nor[2];
+					}
+					indices.assign(batch.drapeIndices.begin(), batch.drapeIndices.end());
+					cut = surface.DrapePlaced(pieces, indices, axes, origin) && !indices.empty();
+					if (!cut)
+						++burst.flatBatches; // reaches off the terrain
+				}
+
+				if (!cut)
+				{
+					if (wasDraped)
+						renderable->SetMesh(object.asset->GetMesh(), batch.subMesh);
+					continue;
+				}
+
+				// Tangents from the UVs, as the OBJ's own
+				vertices.clear();
+				vertices.reserve(pieces.size());
+				for (const OverlayVertex &piece : pieces)
+					vertices.emplace_back(Vec3(piece.x, piece.y, piece.z), Vec2(piece.u, piece.v), Vec3(piece.nx, piece.ny, piece.nz), Vec3(1.0f, 0.0f, 0.0f));
+				ComputeVertexTangents(vertices, indices);
+
+				if (!frame.chunk)
+				{
+					frame.chunk = CreateRef<Mesh>();
+					frame.chunk->SetFlags(0); // object-space meters as they are: no normalization or generated LODs
+					frame.chunk->SetResourceName("Draped OBJ geometry");
+				}
+				uint32_t subMesh = 0;
+				frame.chunk->AddGeometry(vertices, indices, false, &subMesh);
+				frame.pieces.push_back({ renderable, subMesh });
+				draped.push_back(i);
+				++burst.batches;
+				burst.triangles += static_cast<uint32_t>(indices.size() / 3);
+			}
+
+			frame.draped.emplace_back(&drape, !draped.empty());
+			drape.batches = std::move(draped);
+		}
+
+		/**
+		 * @brief Keeps a placement's draped batches on the terrain: drapes them once, again when the terrain changed (or
+		 * whether it stands on it, SetOnTerrain), and again when a move has settled (DRAPE_CHECK_PHASES). Due work waits
+		 * for the next frame once this frame's DRAPE_BUDGET_MS is spent.
+		 */
+		void UpdateDrapes(entt::registry &registry, const entt::entity rootHandle, XPlaneDrapeComponent &drape, DrapeFrame &frame)
+		{
+			const bool terrainChanged = !drape.done || drape.terrain != frame.terrainGeneration;
+			const bool inPhase = frame.index++ % DRAPE_CHECK_PHASES == frame.phase;
+			if (!terrainChanged && !inPhase)
+				return;
+
+			const TransformComponent *transform = registry.try_get<TransformComponent>(rootHandle);
+			if (!transform)
+				return;
+
+			const std::array<float, 10> current = PackTransform(*transform);
+			bool settled = false;
+			if (inPhase)
+			{
+				settled = current == drape.seen;
+				drape.seen = current;
+			}
+			const bool settledElsewhere = drape.done && settled && current != drape.transform;
+			if (!terrainChanged && !settledElsewhere)
+				return;
+
+			const XPlaneObjectComponent *object = registry.try_get<XPlaneObjectComponent>(rootHandle);
+			if (!object || !object->loaded || !object->asset)
+				return;
+
+			if (frame.placements > 0 && frame.milliseconds >= DRAPE_BUDGET_MS)
+			{
+				++frame.waiting;
+				return;
+			}
+
+			const auto start = std::chrono::steady_clock::now();
+			DrapeBatches(*object, drape, *transform, frame, s_DrapeBurst);
+			frame.milliseconds += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			drape.done = true;
+			drape.terrain = frame.terrainGeneration;
+			drape.transform = current;
+			++frame.placements;
+		}
+
+		/* @brief Builds this frame's chunk and points the draped batches at it; their previous pieces go with their meshes. */
+		void FinishDrapes(DrapeFrame &frame)
+		{
+			if (frame.chunk)
+			{
+				// The global geometry buffer keeps the vertices; the sub-meshes keep their bounds
+				frame.chunk->CreateGpuBuffers();
+				frame.chunk->ReleaseCpuGeometry();
+			}
+			for (const DrapeFrame::Piece &piece : frame.pieces)
+				piece.renderable->SetMesh(frame.chunk.Get(), piece.subMesh);
+			for (const auto &[drape, any] : frame.draped)
+				drape->mesh = any ? frame.chunk : Ref<Mesh>(); // a previous chunk goes once none of its placements use it
+		}
 	}
 
 	// -------------------------------------------------------
@@ -872,6 +1105,7 @@ namespace SceneryEditorX::XPlane
 		component.asset = asset;
 		component.virtualPath = options.virtualPath;
 		component.logPlacement = options.frameCamera; // a user placement, not one of an airport's thousands
+		component.placedOnTerrain = options.onTerrain;
 		registry->emplace_or_replace<XPlaneObjectComponent>(rootHandle, std::move(component));
 		const uint64_t rootId = GetId(*registry, rootHandle);
 
@@ -981,13 +1215,42 @@ namespace SceneryEditorX::XPlane
 			if (inputsChanged || settingsChanged || cameraMatters)
 				UpdateObject(*registry, rootHandle, object, hasCamera, cameraPosition, inputsChanged || settingsChanged, parentCache);
 			else
-				ResolveEntities(*registry, rootHandle, object); // the lights below use the entity pointers
+				ResolveEntities(*registry, rootHandle, object); // the lights (and drapes) below use the entity pointers
 
 			// Lights: billboards and spill candidates
 			CollectObjectLights(*registry, rootHandle, object, lights, parentCache);
 		}
 		Perf::SetCounter("anim groups posed", s_GroupsPosed);
 		Perf::SetCounter("anim groups moved", s_GroupsMoved);
+
+		// ATTR_draped geometry on the terrain: only the placements that have some
+		DrapeFrame drapes;
+		drapes.terrainGeneration = SceneTerrain::GetGeneration();
+		drapes.phase = static_cast<uint32_t>(s_TickCount % DRAPE_CHECK_PHASES);
+		{
+			SEDX_PERF_SCOPE("Objects: drapes");
+			auto drapeView = registry->view<XPlaneDrapeComponent>();
+			for (const entt::entity rootHandle : drapeView)
+				UpdateDrapes(*registry, rootHandle, drapeView.get<XPlaneDrapeComponent>(rootHandle), drapes);
+			FinishDrapes(drapes);
+		}
+		Perf::SetCounter("objects draped", drapes.placements);
+
+		// One line per burst of draping (an airport's placements as their objects arrive, a moved object), once it has
+		// been quiet for a while
+		if (drapes.placements > 0 || drapes.waiting > 0)
+		{
+			s_DrapeBurst.frames += drapes.placements > 0 ? 1 : 0;
+			s_DrapeBurst.placements += drapes.placements;
+			s_DrapeBurst.milliseconds += drapes.milliseconds;
+			s_DrapeBurst.quietFrames = 0;
+		}
+		else if (s_DrapeBurst.placements > 0 && ++s_DrapeBurst.quietFrames >= DRAPE_BURST_QUIET_FRAMES)
+		{
+			SEDX_CORE_INFO_TAG(LOG_TAG, "Draped {} placements on the terrain: {} batches, {} triangles ({} left flat, reaching off it), {:.1f} ms over {} frames",
+				s_DrapeBurst.placements, s_DrapeBurst.batches, s_DrapeBurst.triangles, s_DrapeBurst.flatBatches, s_DrapeBurst.milliseconds, s_DrapeBurst.frames);
+			s_DrapeBurst = {};
+		}
 
 		// Spill: only the nearest lights light the scene
 		std::ranges::sort(lights.spills, [](const SpillCandidate &a, const SpillCandidate &b) { return a.distanceSquared < b.distanceSquared; });
@@ -1095,6 +1358,18 @@ namespace SceneryEditorX::XPlane
 			}
 			break;
 		}
+	}
+
+	void SceneObjects::SetOnTerrain(const uint64_t rootId, const bool onTerrain)
+	{
+		entt::registry *registry = GetRegistry();
+		const entt::entity rootHandle = registry ? FindHandle(*registry, rootId) : entt::null;
+		XPlaneObjectComponent *object = rootHandle != entt::null ? registry->try_get<XPlaneObjectComponent>(rootHandle) : nullptr;
+		if (!object || object->placedOnTerrain == onTerrain)
+			return;
+		object->placedOnTerrain = onTerrain;
+		if (XPlaneDrapeComponent *drape = registry->try_get<XPlaneDrapeComponent>(rootHandle))
+			drape->done = false; // draped again (or flat) with the next Tick()
 	}
 
 	void SceneObjects::Shutdown()

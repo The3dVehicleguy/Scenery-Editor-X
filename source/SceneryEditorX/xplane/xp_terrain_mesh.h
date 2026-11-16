@@ -171,6 +171,16 @@ namespace SceneryEditorX::XPlane
 		/* @brief Drape() for an overlay mesh, bounds kept. */
 		uint32_t Drape(OverlayMesh &mesh, bool clip = false) const;
 
+		/**
+		 * @brief Drape() for geometry in an object's own space (an OBJ's ATTR_draped batches): placed into the terrain's
+		 * frame by a row-vector transform (p' = p * axes + origin: the placement's heading, scale and position), draped
+		 * there and brought back into object space, so it still draws under the object's transform yet lies on the
+		 * terrain. A vertex's height above the object's origin is its offset over the ground (the object's own height,
+		 * AGL or MSL, doesn't lift it, as X-Plane drapes it); up normals turn with the terrain like Drape()'s.
+		 * @return False, geometry untouched, when a vertex has no terrain under it or the transform can't be inverted.
+		 */
+		bool DrapePlaced(std::vector<OverlayVertex> &vertices, std::vector<uint32_t> &indices, const double axes[3][3], const double origin[3]) const;
+
 		/* @brief Lifts every vertex by the terrain's height under it (3D geometry: walls and roofs follow the ground). */
 		void Lift(std::vector<OverlayVertex> &vertices) const;
 

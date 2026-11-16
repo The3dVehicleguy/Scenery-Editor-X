@@ -975,6 +975,12 @@ namespace SceneryEditorX::XPlane
 			ObjectBatch out = std::move(batch.batch);
 			out.material = GetOrCreateMaterial(batch.state);
 			m_Mesh->AddGeometry(batch.vertices, batch.indices, false, &out.subMesh);
+			// Placements drape static ATTR_draped geometry over the terrain themselves (a few quads: parking bays, stop bars)
+			if (out.draped && out.node < 0)
+			{
+				out.drapeVertices = std::move(batch.vertices);
+				out.drapeIndices = std::move(batch.indices);
+			}
 			m_Batches.push_back(std::move(out));
 		}
 		job.batches.clear();

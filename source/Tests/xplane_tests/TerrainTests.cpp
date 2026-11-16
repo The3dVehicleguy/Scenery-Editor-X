@@ -839,6 +839,80 @@ TEST_CASE("The terrain surface: heights, rays and draping", "[terrain]")
 		}
 		CHECK_THAT(area, WithinAbs(50.0 * 20.0, 0.01));
 	}
+
+	SECTION("An object's draped geometry is placed, draped and brought back into object space")
+	{
+		// A 3 x 34 m parking bay in object space (like KPVD's space_single_wht_12x.obj), 1 cm up, u / v from the position
+		const auto bay = []
+		{
+			std::vector<OverlayVertex> vertices(4);
+			const float corners[4][2] = { { -1.5f, -17.0f }, { 1.5f, -17.0f }, { 1.5f, 17.0f }, { -1.5f, 17.0f } };
+			for (int i = 0; i < 4; ++i)
+			{
+				vertices[i].x = corners[i][0];
+				vertices[i].z = corners[i][1];
+				vertices[i].y = 0.01f;
+				vertices[i].u = vertices[i].x / 3.0f + 0.5f;
+				vertices[i].v = vertices[i].z / 34.0f + 0.5f;
+			}
+			return vertices;
+		};
+		// Turned 0.6 rad about +Y (row vectors: p' = p * axes + origin), across the crease, the object itself 123 m up (MSL
+		// placements stand anywhere): the drape still lies on the ground
+		const double c = std::cos(0.6), s = std::sin(0.6);
+		const double axes[3][3] = { { c, 0.0, -s }, { 0.0, 1.0, 0.0 }, { s, 0.0, c } };
+		const double origin[3] = { 50.0, 123.0, 50.0 };
+		const auto place = [&](const OverlayVertex &v, double out[3])
+		{
+			for (int j = 0; j < 3; ++j)
+				out[j] = v.x * axes[0][j] + v.y * axes[1][j] + v.z * axes[2][j] + origin[j];
+		};
+
+		std::vector<OverlayVertex> vertices = bay();
+		std::vector<uint32_t> indices = { 0, 2, 1, 0, 3, 2 };
+		REQUIRE(surface.DrapePlaced(vertices, indices, axes, origin));
+		CHECK(indices.size() / 3 > 2);	// Cut along the crease
+
+		double area = 0.0;
+		for (size_t i = 0; i + 2 < indices.size(); i += 3)
+		{
+			const OverlayVertex &a = vertices[indices[i]], &b = vertices[indices[i + 1]], &c3 = vertices[indices[i + 2]];
+			area += std::abs((b.x - a.x) * (c3.z - a.z) - (b.z - a.z) * (c3.x - a.x)) * 0.5;
+			// Every piece is flat on one terrain face: its middle, placed, is on the terrain too
+			OverlayVertex middle;
+			middle.x = (a.x + b.x + c3.x) / 3.0f;
+			middle.y = (a.y + b.y + c3.y) / 3.0f;
+			middle.z = (a.z + b.z + c3.z) / 3.0f;
+			double placed[3];
+			place(middle, placed);
+			CHECK_THAT(placed[1], WithinAbs(CreaseHeight(placed[0], placed[2]) + 0.01, 1e-3));
+		}
+		CHECK_THAT(area, WithinAbs(3.0 * 34.0, 0.01));	// In object space, so the heading is undone
+		for (const OverlayVertex &vertex : vertices)
+		{
+			double placed[3];
+			place(vertex, placed);
+			CHECK_THAT(placed[1], WithinAbs(CreaseHeight(placed[0], placed[2]) + 0.01, 1e-3));
+			CHECK_THAT(vertex.u, WithinAbs(vertex.x / 3.0 + 0.5, 1e-4));
+			CHECK_THAT(vertex.v, WithinAbs(vertex.z / 34.0 + 0.5, 1e-4));
+			CHECK(vertex.x >= -1.5f - 1e-3f);
+			CHECK(vertex.x <= 1.5f + 1e-3f);
+			CHECK(vertex.ny > 0.99f);
+		}
+
+		// Reaching off the terrain (x > 100): left as it was
+		std::vector<OverlayVertex> off = bay();
+		std::vector<uint32_t> offIndices = { 0, 2, 1, 0, 3, 2 };
+		const double edge[3] = { 99.0, 0.0, 50.0 };
+		CHECK_FALSE(surface.DrapePlaced(off, offIndices, axes, edge));
+		CHECK(offIndices.size() == 6);
+		CHECK(off[2].x == 1.5f);
+		CHECK(off[2].y == 0.01f);
+
+		// And nothing to drape on without terrain
+		TerrainSurface none;
+		CHECK_FALSE(none.DrapePlaced(off, offIndices, axes, origin));
+	}
 }
 
 TEST_CASE("Every X-Plane 12 default .ter parses with its textures", "[assets][terrain][xplane-install][library-sweep]")
