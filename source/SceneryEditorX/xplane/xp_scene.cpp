@@ -106,7 +106,11 @@ namespace SceneryEditorX::XPlane
 		 */
 		constexpr uint32_t DRAPE_CHECK_PHASES = 8;
 
-		/* @brief Main-thread time a frame spends draping placements (at least one): an airport's thousands spread over frames. */
+		/*
+		 * @brief Main-thread time a frame spends draping placements: an airport's thousands spread over frames. Checked
+		 * before each placement, so a frame drapes at least one and the last may run a little over (one placement is a few
+		 * quads: KDEN's average is under 10 microseconds).
+		 */
 		constexpr double DRAPE_BUDGET_MS = 2.0;
 
 		/**
@@ -146,6 +150,8 @@ namespace SceneryEditorX::XPlane
 				Renderable *renderable = nullptr;
 				uint32_t subMesh = 0;
 			};
+			// Pointers into the registry's storage, kept from the drape loop to FinishDrapes() in the same Tick(): valid
+			// because nothing adds or removes Renderable or XPlaneDrapeComponent components (or entities) in between.
 			std::vector<Piece> pieces;		// Batch entities to point at the chunk once it is built
 			std::vector<std::pair<XPlaneDrapeComponent *, bool>> draped;	// Placements draped, and whether any batch went into the chunk
 		};
