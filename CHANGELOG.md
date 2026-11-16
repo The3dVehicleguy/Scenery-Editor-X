@@ -72,6 +72,15 @@ versions.
   depth test came down to rounding (at KPVD the stretch beside the service road south-west of the tower was hidden from
   far away, and up close too once the terrain was back in the depth buffer within 700 m). It now sits 1 mm above the
   terrain, still the lowest of the airport's drapes (`HEIGHT_BOUNDARY`). (0.2.101.602)
+- Painted markings placed as X-Plane objects (`ATTR_draped` geometry: parking bays, stop bars, road markings from DSF
+  objects and `.agp` art) now follow the terrain like in X-Plane instead of sinking into sloping ground. They were drawn
+  rigid and flat at the terrain's height under the object's origin, so the far end of a long one went under the ground
+  where it rose (KPVD's 34 m parking bays: more than 8.5 cm within 10 m at 10 of the 259 placed). Each placement now
+  cuts its static draped batches along the terrain's triangles (`TerrainSurface::DrapePlaced`) and draws its own copy;
+  a moved object is draped again once it stands still for a few frames, and stays rigid while it is dragged. Animated
+  draped geometry, a batch that reaches off the terrain, and one larger than 65,536 indices (some 21,000 triangles,
+  0.2.104.605) still draw flat. (0.2.102.603; the terrain's normal kept on objects scaled unevenly, and moved objects
+  checked on a steady schedule, 0.2.103.604; that schedule unit-tested, `xp_drape_schedule.h`, 0.2.105.606)
 - The ground no longer turns grey within 700 m of the camera: zooming in on an airport showed a flat grey disc where
   the terrain should be (grass, fields, towns), moving with the camera, with only pavements and objects drawn on it. The
   depth passes took the alpha of an X-Plane `.ter` base texture for coverage and cut the terrain out within 700 m (the

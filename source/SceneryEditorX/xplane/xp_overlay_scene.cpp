@@ -482,6 +482,7 @@ namespace SceneryEditorX::XPlane
 				options.virtualPath = object->resource.starts_with("lib/") ? object->resource : std::string();
 				options.name = object->name;
 				options.frameCamera = false;
+				options.onTerrain = onTerrain;	// Off the terrain the draped geometry lies flat like everything else
 				std::string error;
 				const uint64_t objectId = SceneObjects::Place(object->file, options, &error);
 				const entt::entity objectHandle = FindHandle(registry, objectId);

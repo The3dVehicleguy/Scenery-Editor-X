@@ -348,6 +348,7 @@ namespace SceneryEditorX::EditorProjects
 			options.virtualPath = item.resource;
 			options.name = item.name.empty() ? ToUtf8(file.filename()) : item.name;
 			options.frameCamera = false;
+			options.onTerrain = OnTerrain();	// Its draped geometry drapes over the terrain only in the terrain's frame
 
 			std::string error;
 			const uint64_t root = XPlane::SceneObjects::Place(file, options, &error);
@@ -1076,6 +1077,8 @@ namespace SceneryEditorX::EditorProjects
 						continue;
 					transform->translation.y = HeightOf(*item, transform->translation.x, transform->translation.z);
 					GpuScene::MarkTransformDirty(handle);
+					// Its draped geometry follows: over the terrain when it is in the project's frame, else flat
+					XPlane::SceneObjects::SetOnTerrain(root, OnTerrain());
 				}
 			}
 
