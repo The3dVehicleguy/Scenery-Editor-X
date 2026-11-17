@@ -287,6 +287,14 @@ namespace SceneryEditorX::XPlane
 	 */
 	std::vector<DsfFile> SplitDsfByTile(const DsfFile &dsf, std::vector<std::string> *warnings = nullptr);
 
+	/**
+	 * @brief Adds another DSF's overlay content to a DSF (the tiles of one scenery pack read as one): its objects, polygons
+	 * and road segments with their definitions renumbered (one entry per path), filters dropped, road junction ids moved
+	 * past the ones already there so the two networks stay apart, and the sim/exclude_* properties @p into lacks. The
+	 * bounds widen to cover both. Terrain and rasters aren't merged.
+	 */
+	void AppendDsf(DsfFile &into, const DsfFile &from);
+
 	/* @brief MD5 digest (RFC 1321) of some bytes, as a DSF footer carries it. */
 	std::array<uint8_t, 16> Md5(const uint8_t *data, size_t size);
 

@@ -2,6 +2,69 @@
 
 A project is the file you work in. It holds everything you author for one scenery pack: its airports, the objects, facades, forests, lines, polygons and roads it places, the library it publishes, and your saved library filters. X-Plane never reads the project itself; you [export](import-export.md#exporting-a-scenery-pack) it to the `apt.dat` and DSF files X-Plane loads.
 
+## The Project Hub
+
+The **Project Hub** is where the editor starts: it opens once the workspace is up (after the [first-launch keymap
+question](first-launch.md)) and lets you choose what to work on. **File › Project Hub…** (<kbd>Ctrl+Shift+O</kbd>)
+brings it back at any time. Its left column has three pages:
+
+| Page | What it does |
+|---|---|
+| **Recent Projects** | The projects you opened last, newest first, with their folder and when you opened them. Type in **Search** to filter by name or folder; double-click a project (or select it and click **Open**) to open it. **Show in Folder** opens its folder; **Remove from List** takes it off the list without touching its files. A project whose file has gone is greyed out and marked *missing*; **Remove *n* missing** clears those. |
+| **New Project** | The [New Project](#kinds-of-project) form, set to an airport project. Pick **Scenery** or **Library** at the top for the other kinds. |
+| **Clone from Gateway** | Copies an airport from the X-Plane Scenery Gateway into a project folder of your own. See [Cloning an airport from the Scenery Gateway](#cloning-an-airport-from-the-scenery-gateway). |
+
+**Open Project…** under the pages browses for any `.edX`, `.sex` or `earth.wed.xml` file.
+
+Untick **Show at startup** to start on an empty workspace instead; **File › Project Hub…** still opens it.
+**Continue Without a Project** (or **Close** when a project is open) leaves the hub. If the open project has unsaved
+changes, the hub says so, and opening another project from it asks whether to save them first.
+
+## Cloning an airport from the Scenery Gateway
+
+To work on an airport that's already on the [X-Plane Scenery Gateway](https://gateway.x-plane.com), clone it: the
+editor downloads one of its submissions into a project folder of its own and turns it into an ordinary project, with
+the airport's layout and its scenery (objects, polygons, facades, lines, forests, roads and exclusion zones) as items
+you can edit.
+
+<!-- class: steps -->
+1. Open the Project Hub's **Clone from Gateway** page (or **File › Clone Gateway Airport…**). The first visit downloads
+   the Gateway's airport list (about 20 MB, kept for a day; **Refresh** fetches it again).
+2. Search by code or name. **Has scenery** and **3D** narrow the list; type a code and press <kbd>Enter</kbd> to look it
+   up directly.
+3. Select the airport. Its submissions are listed newest first, with their artist, upload date and status; the
+   recommended one (marked with a star: what X-Plane ships) is picked for you. Hover over a submission for the artist's
+   and moderators' comments.
+4. Under **Clone into**, choose the **Folder** the project folder is made in and, if you like, a **Project name**
+   (`ICAO - Name` by default). The line below shows the folder that will be created.
+5. Click **Clone *submission* and Open**. The editor downloads the submission, creates the folder and opens the project.
+
+The clone's folder holds the submission's files exactly as the Gateway sent them (`Earth nav data/apt.dat`, the DSF
+tiles, and the artist's `README` / `COPYING` files) next to the project file, laid out as a scenery pack:
+
+```
+Documents/Scenery Editor X/Projects/KBTV - Burlington Intl/
+    KBTV - Burlington Intl.edX
+    Earth nav data/apt.dat
+    Earth nav data/+40-080/+44-074.dsf
+    objects/   textures/
+```
+
+The default folder is `Documents/Scenery Editor X/Projects`, outside X-Plane's `Custom Scenery`, so X-Plane keeps
+flying the airport it already has while you work on the copy; the hub warns you if you pick a folder inside
+`Custom Scenery`. The folder you clone into last is remembered. When you want to see your work in X-Plane,
+[export](import-export.md#exporting-a-scenery-pack) the project into `Custom Scenery` (or into its own folder and move
+that there).
+
+The project remembers the submission it came from (WorldEditor's *scenery id*), which a Gateway upload names as its
+parent. Anything in the submission the editor can't turn into an item (terrain in a DSF, a placement of an unknown
+kind) is listed in the log as a warning when you clone; exporting the project writes the pack's `apt.dat` and DSF
+tiles from the project from then on.
+
+The **AIRPORTS** panel's **Gateway** tab has a **Clone as Project…** button that opens this page on the airport and
+submission selected there. [The Scenery Gateway](airports.md#the-scenery-gateway) describes installing a submission as
+a plain scenery pack instead.
+
 ## Kinds of project
 
 **File › New Project…** (<kbd>Ctrl+N</kbd>) offers three kinds. They differ only in what the dialog asks for and what's in the new folder; any project can have airports added or removed later.
@@ -29,6 +92,7 @@ An airport project uses the airport's reference point. A scenery project can lea
 
 | Command | Shortcut | Notes |
 |---|---|---|
+| **File › Project Hub…** | <kbd>Ctrl+Shift+O</kbd> | Recent projects, a new project, or an airport cloned from the Gateway. [The Project Hub](#the-project-hub) |
 | **File › New Project…** | <kbd>Ctrl+N</kbd> | See above. |
 | **File › Open Project…** | <kbd>Ctrl+O</kbd> | Opens `.edX`, `.sex` and WorldEditor `earth.wed.xml` files. Double-clicking a `.edX` or `.sex` file in Explorer does the same. |
 | **File › Open Recent** | | The projects you opened last. |

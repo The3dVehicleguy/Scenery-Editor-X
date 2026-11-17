@@ -9,6 +9,21 @@ versions.
 
 ### Added
 
+- **Project Hub** (0.2.113.614). The editor starts on a window for choosing what to work on (after the first-launch
+  keymap question; **File › Project Hub…** or <kbd>Ctrl+Shift+O</kbd> brings it back, and **Show at startup** turns
+  the startup part off): **Recent Projects** (searchable, opened with a double-click, missing files marked and removable,
+  **Show in Folder**), **New Project** (the New Project form, set to an airport), **Open Project…**, and **Clone from
+  Gateway**, which searches the Scenery Gateway's airports, lists an airport's submissions with the recommended one
+  picked, and clones one into a project folder of its own, outside X-Plane's `Custom Scenery` by default
+  (`Documents/Scenery Editor X/Projects`): the submission's files as downloaded plus an `.edX` project holding its
+  airport and its DSF placements as editable items, with the submission's scenery id recorded as the next upload's
+  parent. The AIRPORTS panel's Gateway tab gains **Clone as Project…**. Command line: `--project-hub
+  [recent|new|gateway]`, `--gateway-clone "<scenery id>[;folder]"`. For developers: `ProjectFile::ImportDsfItems`
+  (a DSF's placements as project items, the inverse of `BuildProjectDsf`, polygons top of the hierarchy first),
+  `XPlane::AppendDsf` (a pack's tiles read as one DSF), `project/gateway_clone.*` (standard library only) and
+  `XPlane::SearchGatewayAirports` (the Gateway search the AIRPORTS panel and the hub share), covered by
+  `DsfImportTests.cpp` and `GatewayCloneTests.cpp` in `ProjectFormatTests` and a search case in `AirportTests.cpp`.
+
 - **Interface languages** (0.2.90.591). The editor can show its menus, panels and messages in other languages:
   **Edit › Preferences › Interface** (or **Help › Language...**) switches at once, without a restart, and
   `ui.language = "system"` in `settings.cfg` (the new default) follows the operating system's languages; `--language

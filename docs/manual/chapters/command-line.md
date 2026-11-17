@@ -25,6 +25,7 @@ SceneryEditorX.exe --project "D:\Scenery\KSEA Seattle\KSEA Seattle.edX" --env-ti
 | `--library-search <text>` | Starts the X-PLANE LIBRARY with this search. |
 | `--library-grid` | Starts the X-PLANE LIBRARY in thumbnail grid view. |
 | `--welcome` | Shows the first-launch keymap window even if you've already chosen. |
+| `--project-hub [recent\|new\|gateway]` | Shows the Project Hub at startup, on the page given (Recent Projects by default), even when other options are given or **Show at startup** is off. |
 
 ## Projects and export, without the dialogs
 
@@ -33,6 +34,7 @@ SceneryEditorX.exe --project "D:\Scenery\KSEA Seattle\KSEA Seattle.edX" --env-ti
 | `--new-airport-project "ICAO;Name;Country;lat;lon;elevation ft[;folder]"` | Creates an airport project (in Custom Scenery unless a folder is given) and opens it. If it already exists, opens it. |
 | `--new-scenery-project "Name;lat;lon[;folder]"` | Creates a scenery project. Leave the coordinates empty for a project without a reference point. |
 | `--show-dialog new` / `export` | Opens the New Project or Export dialog at startup. |
+| `--gateway-clone "<scenery id>[;folder]"` | Downloads a Scenery Gateway submission, clones it into a project folder (in the folder given, else where the last clone went, else `Documents/Scenery Editor X/Projects`) and opens the project. |
 | `--export-scenery [folder]` | Exports the opened project as a scenery pack (into its own folder, or the folder given) once it has loaded. |
 | `--project-autosave <seconds>` | How often unsaved changes are written to the recovery file (60 by default). |
 

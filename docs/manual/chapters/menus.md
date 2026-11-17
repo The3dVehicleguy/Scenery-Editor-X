@@ -6,6 +6,8 @@ Every item in the menu bar, in order. Items that need something (an open project
 
 | Item | Shortcut | What it does |
 |---|---|---|
+| Project Hub… | <kbd>Ctrl+Shift+O</kbd> | Recent projects, a new project, or a Scenery Gateway airport cloned into a folder of your own. [The Project Hub](projects.md#the-project-hub) |
+| Clone Gateway Airport… | | Opens the Project Hub on **Clone from Gateway**. [Cloning](projects.md#cloning-an-airport-from-the-scenery-gateway) |
 | New Project… | <kbd>Ctrl+N</kbd> | A new scenery, airport or library project, created in Custom Scenery or a folder you choose. [Projects](projects.md#kinds-of-project) |
 | New Airport in Project… | | Adds a new airport (ICAO code, name, reference point) to the open project. |
 | Open Project… | <kbd>Ctrl+O</kbd> | Opens a `.edX`, `.sex` or `earth.wed.xml` project. |

@@ -147,6 +147,21 @@ namespace SceneryEditorX::XPlane
 
 	/* @brief "KSEA - Seattle Tacoma Intl" style folder name, with characters a file system rejects replaced. */
 	std::string MakeGatewayPackageName(std::string_view code, std::string_view airportName);
+
+	/* @brief What SearchGatewayAirports keeps. */
+	struct GatewaySearchOptions
+	{
+		bool onlyWithScenery = true;		// Airports with an accepted, approved or recommended submission
+		bool only3D = false;				// Airports with 3D submissions
+		size_t maxResults = 1000;
+	};
+
+	/**
+	 * @brief The airports a search box finds, as indices into @p airports: every word of the query (case-insensitive) must
+	 * be the start of the code or appear in the name. An exact code comes first, then codes starting with a word, then
+	 * the rest; each group in code order. An empty query keeps every airport the options allow, in code order.
+	 */
+	std::vector<uint32_t> SearchGatewayAirports(const std::vector<GatewayAirport> &airports, std::string_view query, const GatewaySearchOptions &options = {});
 }
 
 // -------------------------------------------------------

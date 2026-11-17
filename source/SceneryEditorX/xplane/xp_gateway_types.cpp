@@ -29,6 +29,7 @@
  * -------------------------------------------------------
  */
 #include "xp_gateway_types.h"
+#include <algorithm>
 #include <nlohmann/json.hpp>
 
 // -------------------------------------------------------
@@ -385,6 +386,79 @@ namespace SceneryEditorX::XPlane
 		while (!name.empty() && (name.front() == ' ' || name.front() == '.' || name.front() == '-'))
 			name.erase(name.begin());
 		return name.empty() ? std::string("Gateway Airport") : name;
+	}
+
+	std::vector<uint32_t> SearchGatewayAirports(const std::vector<GatewayAirport> &airports, const std::string_view query, const GatewaySearchOptions &options)
+	{
+		const auto lower = [](const std::string_view text)
+		{
+			std::string out(text);
+			for (char &c : out)
+			{
+				if (c >= 'A' && c <= 'Z')
+					c = static_cast<char>(c - 'A' + 'a');
+			}
+			return out;
+		};
+
+		const auto separator = [](const char c) { return c == ' ' || c == '\t' || c == ','; };
+		std::vector<std::string> words;
+		for (size_t i = 0; i < query.size();)
+		{
+			while (i < query.size() && separator(query[i]))
+				++i;
+			const size_t start = i;
+			while (i < query.size() && !separator(query[i]))
+				++i;
+			if (i > start)
+				words.push_back(lower(query.substr(start, i - start)));
+		}
+
+		// Rank 0: the code is a word; 1: the code starts with a word; 2: every word is in the name (or the code)
+		std::vector<std::pair<int, uint32_t>> hits;
+		for (uint32_t i = 0; i < airports.size(); ++i)
+		{
+			const GatewayAirport &airport = airports[i];
+			if (options.onlyWithScenery && !airport.HasScenery())
+				continue;
+			if (options.only3D && airport.sceneryType < 2)
+				continue;
+			int rank = 2;
+			bool matches = true;
+			const std::string code = lower(airport.code);
+			std::string name;
+			for (const std::string &word : words)
+			{
+				if (code == word)
+					rank = std::min(rank, 0);
+				else if (code.starts_with(word))
+					rank = std::min(rank, 1);
+				else
+				{
+					if (name.empty())
+						name = lower(airport.name);
+					if (name.find(word) == std::string::npos && code.find(word) == std::string::npos)
+					{
+						matches = false;
+						break;
+					}
+				}
+			}
+			if (matches)
+				hits.emplace_back(rank, i);
+		}
+		std::ranges::stable_sort(hits, [&airports](const auto &a, const auto &b)
+		{
+			if (a.first != b.first)
+				return a.first < b.first;
+			return airports[a.second].code < airports[b.second].code;
+		});
+
+		std::vector<uint32_t> results;
+		results.reserve(std::min(hits.size(), options.maxResults));
+		for (size_t i = 0; i < hits.size() && i < options.maxResults; ++i)
+			results.push_back(hits[i].second);
+		return results;
 	}
 }
 

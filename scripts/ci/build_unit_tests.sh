@@ -158,7 +158,7 @@ suite_sources()
 				$SE/project/spline_edit.cpp $SE/project/facade_edit.cpp $SE/project/scenery_pack.cpp $SE/scene/view_framing.cpp \
 				$SE/project/scenery_project.cpp $SE/project/project_edx.cpp $SE/project/project_sex.cpp \
 				$SE/project/project_wed.cpp $SE/project/xml_document.cpp $SE/project/project_io.cpp \
-				$SE/project/project_cache.cpp $SE/project/project_document.cpp $SE/project/project_dsf.cpp \
+				$SE/project/project_cache.cpp $SE/project/project_document.cpp $SE/project/project_dsf.cpp $SE/project/gateway_clone.cpp \
 				$SE/filesystem/vfs.cpp \
 				$SE/xplane/xp_airport_document.cpp $SE/xplane/xp_airport_index.cpp $SE/xplane/xp_apt.cpp \
 				$SE/xplane/xp_library.cpp $SE/xplane/xp_apt_geometry.cpp $SE/xplane/xp_dsf.cpp $SE/xplane/xp_7z.cpp \
