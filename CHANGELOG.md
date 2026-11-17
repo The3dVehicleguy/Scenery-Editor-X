@@ -17,7 +17,8 @@ versions.
   picked, and clones one into a project folder of its own, outside X-Plane's `Custom Scenery` by default
   (`Documents/Scenery Editor X/Projects`): the submission's files as downloaded plus an `.edX` project holding its
   airport and its DSF placements as editable items, with the submission's scenery id recorded as the next upload's
-  parent. The AIRPORTS panel's Gateway tab gains **Clone as Project…**. Command line: `--project-hub
+  parent. A clone that fails partway removes what it wrote, so the same name can be tried again (0.2.114.615).
+  The AIRPORTS panel's Gateway tab gains **Clone as Project…**. Command line: `--project-hub
   [recent|new|gateway]`, `--gateway-clone "<scenery id>[;folder]"`. For developers: `ProjectFile::ImportDsfItems`
   (a DSF's placements as project items, the inverse of `BuildProjectDsf`, polygons top of the hierarchy first),
   `XPlane::AppendDsf` (a pack's tiles read as one DSF), `project/gateway_clone.*` (standard library only) and

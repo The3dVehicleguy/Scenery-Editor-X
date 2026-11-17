@@ -250,6 +250,38 @@ namespace SceneryEditorX::ProjectFile
 		}
 
 		report.folder = GetGatewayCloneFolder(named, submission.icao, submission.airportName);
+
+		// A clone that fails partway takes back what it wrote, so the same name can be tried again. The folder was missing or
+		// empty when it was checked above, so everything in it now is this clone's. Declared before the VFS: it runs last.
+		struct Undo
+		{
+			fs::path folder;
+			bool existed = false;
+			bool keep = false;
+
+			~Undo()
+			{
+				if (keep)
+					return;
+				std::error_code ec;
+				if (!existed)
+				{
+					fs::remove_all(folder, ec);
+					return;
+				}
+				std::vector<fs::path> children;
+				for (fs::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
+					children.push_back(it->path());
+				for (const fs::path &child : children)
+					fs::remove_all(child, ec);
+			}
+		};
+		Undo undo;
+		undo.folder = report.folder;
+		std::error_code ec;
+		undo.existed = fs::exists(report.folder, ec);
+		undo.keep = static_cast<bool>(ec);		// Can't tell what was there: leave it alone
+
 		VFS::FileSystem vfs;
 		if (!vfs.Mount(CLONE, report.folder, false, error))
 			return false;
@@ -273,6 +305,7 @@ namespace SceneryEditorX::ProjectFile
 		for (std::string &warning : warnings)
 			report.warnings.push_back(std::move(warning));
 		WriteGitFiles(report.folder);
+		undo.keep = true;
 		return true;
 	}
 }
