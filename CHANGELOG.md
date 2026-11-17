@@ -21,7 +21,8 @@ versions.
   downloaded, a clone is unzipped, imported and written on a job thread, so a large airport doesn't stall the editor,
   and it goes into the folder the hub showed (0.2.115.616). A pack holding several airports, none of them the
   submission's, isn't cloned (one airport under another code is, with a warning); folder entries are skipped, and of
-  two names differing only in case the first is copied, with a warning (0.2.116.617).
+  two names differing only in case the first is copied, with a warning (0.2.116.617); names lose line ends around
+  them as well as spaces (0.2.117.618).
   The AIRPORTS panel's Gateway tab gains **Clone as Project…**. Command line: `--project-hub
   [recent|new|gateway]`, `--gateway-clone "<scenery id>[;folder]"`. For developers: `ProjectFile::ImportDsfItems`
   (a DSF's placements as project items, the inverse of `BuildProjectDsf`, polygons top of the hierarchy first),

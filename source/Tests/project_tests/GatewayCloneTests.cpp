@@ -447,6 +447,14 @@ TEST_CASE("Gateway clone: the folder made is the one that was checked", "[projec
 	std::string error;
 	GatewayCloneReport report;
 
+	// Names with line ends around them (pasted, or an airport name the Gateway sends that way) lose them too
+	CHECK(GetGatewayCloneName({}, "KTST\r\n", "Test Field\r\n") == "KTST - Test Field");
+	GatewayCloneSpec pasted;
+	pasted.projectName = "\nPasted Name\r\n";
+	CHECK(GetGatewayCloneName(pasted, "KTST", "Test Field") == "Pasted Name");
+	pasted.location = scratch.path;
+	CHECK(ValidateGatewayClone(pasted, "KTST", "Test Field").empty());
+
 	for (const char *typed : { "", "  Spaced Name\t" })
 	{
 		INFO(typed);

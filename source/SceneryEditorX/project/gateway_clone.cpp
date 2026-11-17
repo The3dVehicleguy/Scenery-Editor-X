@@ -67,11 +67,17 @@ namespace SceneryEditorX::ProjectFile
 			return out;
 		}
 
+		/* @brief ASCII white space (not the locale's): a name typed, pasted or sent by the Gateway with a line end. */
+		bool IsSpace(const char c)
+		{
+			return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\v' || c == '\f';
+		}
+
 		std::string_view Trim(std::string_view text)
 		{
-			while (!text.empty() && (text.front() == ' ' || text.front() == '\t'))
+			while (!text.empty() && IsSpace(text.front()))
 				text.remove_prefix(1);
-			while (!text.empty() && (text.back() == ' ' || text.back() == '\t'))
+			while (!text.empty() && IsSpace(text.back()))
 				text.remove_suffix(1);
 			return text;
 		}
