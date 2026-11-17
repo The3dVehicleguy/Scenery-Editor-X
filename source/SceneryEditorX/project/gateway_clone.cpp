@@ -35,6 +35,7 @@
 #include <SceneryEditorX/xplane/xp_apt.h>
 #include <SceneryEditorX/xplane/xp_dsf.h>
 #include <algorithm>
+#include <set>
 #include <system_error>
 
 // -------------------------------------------------------
@@ -156,7 +157,19 @@ namespace SceneryEditorX::ProjectFile
 		const auto named = std::ranges::find_if(apt.airports, [&wanted](const XPlane::AptAirport &airport) { return ToLowerAscii(airport.id) == wanted; });
 		const XPlane::AptAirport &airport = named != apt.airports.end() ? *named : apt.airports.front();
 		if (named == apt.airports.end() && !wanted.empty())
+		{
+			// One airport under another code (the Gateway's code changed since): that's it. Several, none of them the
+			// submission's: no way to tell which, so nothing is guessed
+			if (apt.airports.size() > 1)
+			{
+				std::string ids;
+				for (const XPlane::AptAirport &other : apt.airports)
+					ids += (ids.empty() ? "" : ", ") + other.id;
+				return Fail(error, "Earth nav data/apt.dat holds " + std::to_string(apt.airports.size()) + " airports and none is " +
+					std::string(Trim(submission.icao)) + " (" + ids + ")");
+			}
 			report.warnings.push_back("apt.dat has no airport " + std::string(Trim(submission.icao)) + ": " + airport.id + " was taken");
+		}
 		if (apt.airports.size() > 1)
 			report.warnings.push_back("apt.dat holds " + std::to_string(apt.airports.size()) + " airports: only " + airport.id + " was cloned");
 		for (const std::string &warning : apt.warnings)
@@ -240,12 +253,20 @@ namespace SceneryEditorX::ProjectFile
 			return Fail(error, problems.front().message);
 		std::vector<std::pair<std::string, const XPlane::ZipEntry *>> files;
 		files.reserve(submission.files.size());
+		std::set<std::string> names;	// Lowercase: Windows' and macOS' disks (and the VFS's lookups) don't tell README from readme
 		for (const XPlane::ZipEntry &entry : submission.files)
 		{
+			if (entry.name.empty() || entry.name.back() == '/' || entry.name.back() == '\\')
+				continue;	// A folder entry: folders are made for the files in them
 			bool escaped = false;
 			const std::string relative = VFS::NormalizeRelative(entry.name, &escaped);
 			if (escaped || relative.empty() || fs::path(VFS::FromUtf8(entry.name)).has_root_path())
 				return Fail(error, "The submission names a file outside its folder: " + entry.name);
+			if (!names.insert(ToLowerAscii(relative)).second)
+			{
+				report.warnings.push_back(entry.name + " has the name of another file in the submission (but for case): only the first was copied");
+				continue;
+			}
 			files.emplace_back(relative, &entry);
 		}
 

@@ -103,17 +103,19 @@ namespace SceneryEditorX::ProjectFile
 	/**
 	 * @brief The project a submission becomes, without touching the disk: info (name, author, a description naming the
 	 * submission), the datum at the airport's reference point, the airport from "Earth nav data/apt.dat" (the one with the
-	 * submission's identifier, else the first) with its scenery id, and the placements of every DSF tile under "Earth nav
-	 * data" (ImportDsfItems) inside the airport's item. Tiles that can't be read and placements that can't be imported
-	 * are warnings; no apt.dat or no airport in it fails.
+	 * submission's identifier; else its only airport, with a warning; without an identifier, the first) with its scenery
+	 * id, and the placements of every DSF tile under "Earth nav data" (ImportDsfItems) inside the airport's item. Tiles
+	 * that can't be read and placements that can't be imported are warnings; no apt.dat, no airport in it, or several
+	 * airports none of which is the submission's fails.
 	 */
 	bool MakeGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, SceneryProject &out, GatewayCloneReport &report,
 		std::string *error = nullptr);
 
 	/**
 	 * @brief Creates the clone: ValidateGatewayClone, the project (MakeGatewayCloneProject), then the folder with the
-	 * pack's folders, the submission's files (names that would leave the folder are refused), "<name>.edX" and the git
-	 * helper files. Writes are atomic; nothing is written when the project can't be made.
+	 * pack's folders, the submission's files (names that would leave the folder are refused, folder entries skipped, and
+	 * of names differing only in case the first is copied, with a warning), "<name>.edX" and the git helper files. Writes
+	 * are atomic; nothing is written when the project can't be made, and a clone failing partway removes what it wrote.
 	 */
 	bool CreateGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, GatewayCloneReport &report, std::string *error = nullptr);
 }

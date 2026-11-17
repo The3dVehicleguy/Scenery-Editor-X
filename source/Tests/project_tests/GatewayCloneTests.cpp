@@ -376,6 +376,32 @@ TEST_CASE("Gateway clone: names, folders and hostile archives are checked before
 	CHECK_FALSE(fs::exists(scratch.path / "KTST - Test Field"));
 }
 
+TEST_CASE("Gateway clone: folder entries are skipped, and of names differing only in case the first is copied", "[project][gateway][clone]")
+{
+	Scratch scratch;
+	GatewaySubmission submission = TestSubmission();
+	submission.files.insert(submission.files.begin(), Entry("objects/", std::string_view()));
+	submission.files.push_back(Entry("Earth nav data\\", std::string_view()));
+	submission.files.push_back(Entry("readme.TXT", std::string_view("A second readme\n")));	// Same file as README.txt on Windows / macOS
+	submission.files.push_back(Entry("objects/hangar.obj", std::string_view("A\n800\nOBJ\n")));
+	GatewayCloneSpec spec;
+	spec.location = scratch.path;
+	GatewayCloneReport report;
+	std::string error;
+	REQUIRE(CreateGatewayCloneProject(submission, spec, report, &error));
+	CHECK(report.files == submission.files.size() - 3);	// Not the two folder entries, not the second readme
+	CHECK(std::ranges::any_of(report.warnings, [](const std::string &warning) { return warning.find("readme.TXT has the name of another file") != std::string::npos; }));
+
+	const fs::path folder = report.folder;
+	CHECK(ReadText(folder / "README.txt") == "Gateway scenery, see COPYING\n");	// The first one
+	CHECK(fs::is_regular_file(folder / "objects" / "hangar.obj"));
+	CHECK(fs::is_directory(folder / "Earth nav data"));
+	size_t readmes = 0;
+	for (const fs::directory_entry &entry : fs::directory_iterator(folder))
+		readmes += VFS::ToUtf8(entry.path().filename()) == "README.txt" || VFS::ToUtf8(entry.path().filename()) == "readme.TXT";
+	CHECK(readmes == 1);	// Even on a disk that tells them apart
+}
+
 TEST_CASE("Gateway clone: a clone that fails partway leaves nothing behind", "[project][gateway][clone]")
 {
 	Scratch scratch;
@@ -549,6 +575,19 @@ TEST_CASE("Gateway clone: the submission's airport, every tile, and warnings for
 	const SceneryItem *airport = AirportItem(project);
 	REQUIRE(airport);
 	CHECK(airport->children.size() == 10);
+
+	// Several airports, none of them the submission's: refused rather than guessed
+	GatewaySubmission others = submission;
+	others.files[0] = Entry("Earth nav data/apt.dat", AptDat({ TestAirport("KNBR", "Neighbour"), TestAirport("KOTH", "Other") }));
+	CHECK_FALSE(MakeGatewayCloneProject(others, spec, project, report, &error));
+	CHECK_THAT(error, ContainsSubstring("none is KTST"));
+	CHECK_THAT(error, ContainsSubstring("KNBR, KOTH"));
+
+	// Its only airport under another code (renamed on the Gateway since): taken, with a warning
+	others.files[0] = Entry("Earth nav data/apt.dat", AptDat({ TestAirport("KNEW", "Test Field") }));
+	REQUIRE(MakeGatewayCloneProject(others, spec, project, report, &error));
+	CHECK(report.airportId == "KNEW");
+	CHECK(std::ranges::any_of(report.warnings, [](const std::string &warning) { return warning.find("no airport KTST: KNEW was taken") != std::string::npos; }));
 
 	// Without the submission's identifier, the first airport (and its name for the project)
 	submission.icao.clear();
