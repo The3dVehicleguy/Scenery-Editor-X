@@ -526,3 +526,63 @@ TEST_CASE("Gateway clone: tiles merge into one DSF", "[project][gateway][clone][
 	CHECK(merged.west == -124.0);
 	CHECK(merged.east == -122.0);
 }
+
+TEST_CASE("Gateway clone: road networks of two tiles stay apart, and joined inside each", "[project][gateway][clone][dsf]")
+{
+	// Two tiles written and read back the way a submission's are, each numbering its junctions from 1: a chain of two
+	// segments meeting at junction 2, and the tiles listing their networks in a different order
+	const auto segment = [](const uint32_t definition, const uint32_t start, const uint32_t end, const double longitude, const double latitude)
+	{
+		XPlane::DsfRoadSegment road;
+		road.definition = definition;
+		road.subtype = 3;
+		road.startJunction = start;
+		road.endJunction = end;
+		road.points = { { longitude, latitude, false }, { longitude + 0.001, latitude, false } };
+		return road;
+	};
+	const auto readBack = [](const XPlane::DsfFile &tile)
+	{
+		const std::vector<uint8_t> bytes = WriteTile(tile);
+		XPlane::DsfFile read;
+		std::string error;
+		REQUIRE(XPlane::ReadDsf(bytes.data(), bytes.size(), read, &error));
+		return read;
+	};
+	XPlane::DsfFile a = PackDsf(PackItems(LAT, LON));
+	a.networkDefinitions = { "lib/g10/roads.net" };
+	a.roads = { segment(0, 1, 2, LON, LAT), segment(0, 2, 3, LON + 0.001, LAT) };
+	XPlane::DsfFile b = PackDsf(PackItems(LAT, -123.2));
+	b.networkDefinitions = { "lib/g10/rails.net", "lib/g10/roads.net" };
+	b.roads = { segment(1, 1, 2, -123.2, LAT), segment(1, 2, 3, -123.199, LAT) };
+	a = readBack(a);
+	b = readBack(b);
+	REQUIRE(a.roads.size() == 2);
+	REQUIRE(b.roads.size() == 2);
+
+	XPlane::DsfFile merged;
+	XPlane::AppendDsf(merged, a);
+	XPlane::AppendDsf(merged, b);
+	REQUIRE(merged.roads.size() == 4);
+	CHECK(merged.networkDefinitions == std::vector<std::string>{ "lib/g10/roads.net", "lib/g10/rails.net" });
+	for (const XPlane::DsfRoadSegment &road : merged.roads)
+	{
+		CHECK(merged.networkDefinitions[road.definition] == "lib/g10/roads.net");
+		CHECK(road.startJunction != 0);
+		CHECK(road.endJunction != 0);
+	}
+
+	// Each tile's chain still meets at its middle junction; no junction of one tile is one of the other's
+	CHECK(merged.roads[0].endJunction == merged.roads[1].startJunction);
+	CHECK(merged.roads[2].endJunction == merged.roads[3].startJunction);
+	std::vector<uint32_t> first = { merged.roads[0].startJunction, merged.roads[0].endJunction, merged.roads[1].endJunction };
+	for (const XPlane::DsfRoadSegment &road : { merged.roads[2], merged.roads[3] })
+	{
+		CHECK(std::ranges::find(first, road.startJunction) == first.end());
+		CHECK(std::ranges::find(first, road.endJunction) == first.end());
+	}
+
+	// And the merged network writes and reads back as four segments
+	XPlane::DsfFile written = readBack(merged);
+	CHECK(written.roads.size() == 4);
+}

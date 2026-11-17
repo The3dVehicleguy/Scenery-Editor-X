@@ -1854,6 +1854,9 @@ namespace SceneryEditorX::XPlane
 			polygon.filter = -1;
 			into.polygons.push_back(std::move(polygon));
 		}
+		// Junction ids are 1 and up (in a DSF's road pool 0 marks a shape point, and WriteDsf refuses a segment end without
+		// one): from's ids move past into's highest, so the two networks don't join at junctions that only share a number,
+		// while segments that meet at a junction inside from still meet. An end left at 0 (not set) stays 0.
 		uint32_t junctionOffset = 0;
 		for (const DsfRoadSegment &road : into.roads)
 			junctionOffset = std::max({ junctionOffset, road.startJunction, road.endJunction });
