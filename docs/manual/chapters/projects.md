@@ -38,6 +38,8 @@ you can edit.
 4. Under **Clone into**, choose the **Folder** the project folder is made in and, if you like, a **Project name**
    (`ICAO - Name` by default). The line below shows the folder that will be created.
 5. Click **Clone *submission* and Open**. The editor downloads the submission, creates the folder and opens the project.
+   **Cancel** (or closing the hub) stops the download; once it's downloaded, the project is made in the background (the
+   editor keeps drawing meanwhile) and opens when it's ready.
 
 The clone's folder holds the submission's files exactly as the Gateway sent them (`Earth nav data/apt.dat`, the DSF
 tiles, and the artist's `README` / `COPYING` files) next to the project file, laid out as a scenery pack:

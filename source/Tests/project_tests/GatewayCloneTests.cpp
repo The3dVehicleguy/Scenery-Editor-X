@@ -411,6 +411,83 @@ TEST_CASE("Gateway clone: a clone that fails partway leaves nothing behind", "[p
 	CHECK(std::distance(fs::directory_iterator(scratch.path), fs::directory_iterator()) == 1);	// Nothing else left beside it
 }
 
+TEST_CASE("Gateway clone: the folder made is the one that was checked", "[project][gateway][clone]")
+{
+	// The hub checks the folder with the airport's code and name from the Gateway's airport record, then hands the name
+	// it showed over (GetGatewayCloneName); the downloaded submission may name its airport differently
+	Scratch scratch;
+	GatewaySubmission submission = TestSubmission();
+	submission.airportName = "Test Field Municipal";
+	std::string error;
+	GatewayCloneReport report;
+
+	for (const char *typed : { "", "  Spaced Name\t" })
+	{
+		INFO(typed);
+		GatewayCloneSpec spec;
+		spec.location = scratch.path;
+		spec.projectName = typed;
+		REQUIRE(ValidateGatewayClone(spec, "KTST", "Test Field").empty());
+		const fs::path shown = GetGatewayCloneFolder(spec, "KTST", "Test Field");
+		spec.projectName = GetGatewayCloneName(spec, "KTST", "Test Field");
+		REQUIRE(CreateGatewayCloneProject(submission, spec, report, &error));
+		CHECK(report.folder == shown);
+		CHECK(report.projectFile == shown / VFS::FromUtf8(VFS::ToUtf8(shown.filename()) + ".edX"));
+		CHECK(fs::is_regular_file(report.projectFile));
+	}
+	CHECK(fs::is_directory(scratch.path / "KTST - Test Field"));
+	CHECK(fs::is_directory(scratch.path / "Spaced Name"));
+	CHECK(std::distance(fs::directory_iterator(scratch.path), fs::directory_iterator()) == 2);
+}
+
+TEST_CASE("Gateway clone: a pack's airport filters come back on export, in every tile", "[project][gateway][clone][export]")
+{
+	// Placements filtered to the airport in two tiles: the clone drops the filters (the placements become the airport
+	// item's children) and the export writes them again from that, per tile
+	Scratch scratch;
+	GatewaySubmission submission = TestSubmission();
+	std::erase_if(submission.files, [](const XPlane::ZipEntry &entry) { return entry.name.ends_with(".dsf"); });
+	for (const double longitude : { LON, -123.2 })
+	{
+		XPlane::DsfFile tile = PackDsf(PackItems(LAT, longitude));
+		tile.properties.emplace_back("sim/filter/aptid", "KTST");
+		for (XPlane::DsfObjectPlacement &object : tile.objects)
+			object.filter = 0;
+		for (XPlane::DsfPolygonPlacement &polygon : tile.polygons)
+			polygon.filter = 0;
+		submission.files.push_back(Entry("Earth nav data/+40-130/" + XPlane::GetDsfTileName(LAT, longitude) + ".dsf", WriteTile(tile)));
+	}
+	GatewayCloneSpec spec;
+	spec.location = scratch.path;
+	GatewayCloneReport report;
+	std::string error;
+	REQUIRE(CreateGatewayCloneProject(submission, spec, report, &error));
+	CHECK(report.tiles == 2);
+	SceneryProject project;
+	REQUIRE(LoadProjectFile(report.projectFile, project, nullptr, nullptr, &error));
+
+	const fs::path pack = scratch.path / "Exported";
+	ExportOptions options;
+	ExportReport exported;
+	REQUIRE(ExportSceneryPack(project, report.folder, pack, options, exported, &error));
+	CHECK(exported.tiles == 2);
+	for (const double longitude : { LON, -123.2 })
+	{
+		const std::string name = XPlane::GetDsfTileName(LAT, longitude);
+		INFO(name);
+		const std::string bytes = ReadText(pack / "Earth nav data" / "+40-130" / (name + ".dsf"));
+		XPlane::DsfFile tile;
+		REQUIRE(XPlane::ReadDsf(reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size(), tile, &error));
+		const auto filter = std::ranges::find(tile.properties, std::pair<std::string, std::string>("sim/filter/aptid", "KTST"));
+		REQUIRE(filter != tile.properties.end());
+		CHECK(std::ranges::count(tile.properties, std::string("sim/filter/aptid"), &std::pair<std::string, std::string>::first) == 1);
+		CHECK(tile.objects.size() == 1);
+		CHECK(tile.polygons.size() == 3);
+		CHECK(std::ranges::all_of(tile.objects, [](const XPlane::DsfObjectPlacement &object) { return object.filter == 0; }));
+		CHECK(std::ranges::all_of(tile.polygons, [](const XPlane::DsfPolygonPlacement &polygon) { return polygon.filter == 0; }));
+	}
+}
+
 TEST_CASE("Gateway clone: exporting the project writes its airport once", "[project][gateway][clone][export]")
 {
 	// The clone keeps the submission's own Earth nav data/apt.dat; an export writes apt.dat from the project's airports

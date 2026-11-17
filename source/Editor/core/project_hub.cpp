@@ -35,10 +35,13 @@
 #include "editor_welcome.h"
 #include "project_dialogs.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <exception>
+#include <future>
 #include <map>
 #include <optional>
 #include <portable-file-dialogs.h>
@@ -72,13 +75,23 @@ namespace SceneryEditorX::ProjectHub
 		constexpr size_t MAX_LOGGED_WARNINGS = 25;
 		constexpr const char *PRODUCT_NAME = "Scenery Editor X";						// A name: not translated
 
-		/* @brief A clone the user asked for: the download in flight and where it goes. */
+		/* @brief What the clone job hands back to the UI thread. */
+		struct CloneResult
+		{
+			bool unpacked = false;
+			bool created = false;
+			std::string error;
+			ProjectFile::GatewayCloneReport report;
+		};
+
+		/* @brief A clone the user asked for: the download in flight, then the job making it, and where it goes. */
 		struct PendingClone
 		{
 			std::shared_ptr<GatewayRequest> request;
 			ProjectFile::GatewayCloneSpec spec;
 			std::string label;					// "KSEA #123456"
 			bool fromCommandLine = false;
+			std::future<CloneResult> job;		// Valid once downloaded: unpacking, importing and writing it off the UI thread
 		};
 
 		struct State
@@ -167,10 +180,15 @@ namespace SceneryEditorX::ProjectHub
 		}
 
 		/* @brief Spinner, state and progress of a Gateway request. */
-		void DrawRequestStatus(const GatewayRequest &request, const std::string &what)
+		void DrawBusy(const std::string &what)
 		{
 			static const char *spinner = "|/-\\";
 			ImGui::TextColored(Color(EditorTheme::Palette::Warning), "%c %s", spinner[static_cast<int>(ImGui::GetTime() * 8.0) & 3], what.c_str());
+		}
+
+		void DrawRequestStatus(const GatewayRequest &request, const std::string &what)
+		{
+			DrawBusy(what);
 			ImGui::SameLine();
 			const float progress = request.GetProgress();
 			if (progress >= 0.0f)
@@ -239,12 +257,12 @@ namespace SceneryEditorX::ProjectHub
 			ProjectDialogs::PrepareNewProjectForm(true);
 		}
 
-		/* @brief The hub closed: a clone still downloading is dropped. */
+		/* @brief The hub closed: a clone still downloading is dropped (one being written finishes, then opens). */
 		void OnClosed()
 		{
 			State &s = S();
 			s.isOpen = false;
-			if (s.clone && !s.clone->fromCommandLine)
+			if (s.clone && !s.clone->fromCommandLine && !s.clone->job.valid())
 			{
 				if (s.clone->request && !s.clone->request->IsFinished())
 				{
@@ -342,47 +360,81 @@ namespace SceneryEditorX::ProjectHub
 			s.clone = std::move(clone);
 		}
 
-		/* @brief A finished download: the clone's folder and project, then the project opens. */
+		/**
+		 * @brief The slow part of a clone, run on a job thread: unzipping the submission, reading and importing its DSF tiles
+		 * (a large airport's take a while) and writing the folder. It touches nothing but its arguments.
+		 */
+		CloneResult MakeClone(const std::shared_ptr<const GatewaySceneryPack> pack, const ProjectFile::GatewayCloneSpec spec)
+		{
+			CloneResult result;
+			try
+			{
+				ProjectFile::GatewaySubmission submission;
+				submission.sceneryId = pack->info.sceneryId;
+				submission.icao = pack->icao;
+				submission.airportName = pack->airportName;
+				submission.artist = pack->info.userName;
+				submission.dateUploaded = pack->info.dateUploaded;
+				submission.type = pack->info.type;
+				if (!GatewayClient::UnpackScenery(*pack, submission.files, &result.error))
+					return result;
+				result.unpacked = true;
+				result.created = ProjectFile::CreateGatewayCloneProject(submission, spec, result.report, &result.error);
+			}
+			catch (const std::exception &exception)
+			{
+				result.created = false;
+				result.error = exception.what();
+			}
+			return result;
+		}
+
+		/* @brief A finished download: the clone's folder and project are made on a job thread, then the project opens. */
 		void FinishClone(EditorContext *context)
 		{
 			State &s = S();
 			if (!s.clone || !s.clone->request || !s.clone->request->IsFinished())
 				return;
-			const PendingClone clone = std::move(*s.clone);
+
+			// Downloaded: start the job
+			if (!s.clone->job.valid())
+			{
+				const GatewayRequest &request = *s.clone->request;
+				if (request.GetState() == GatewayRequestState::Cancelled)
+				{
+					s.clone.reset();
+					return;
+				}
+				if (!request.Succeeded() || !request.scenery)
+				{
+					s.cloneError = request.GetError().empty() ? std::string(GetGatewayRequestStateName(request.GetState())) : request.GetError();
+					EDITOR_ERROR_TAG(LOG_TAG, "Gateway download of {} failed: {}", s.clone->label, s.cloneError);
+					s.clone.reset();
+					return;
+				}
+				s.clone->job = std::async(std::launch::async, MakeClone, request.scenery, s.clone->spec);
+				return;
+			}
+			if (s.clone->job.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+				return;
+
+			PendingClone clone = std::move(*s.clone);
 			s.clone.reset();
-			const GatewayRequest &request = *clone.request;
-			if (request.GetState() == GatewayRequestState::Cancelled)
-				return;
-			if (!request.Succeeded() || !request.scenery)
+			const CloneResult result = clone.job.get();
+			const GatewaySceneryPack &pack = *clone.request->scenery;
+			if (!result.unpacked)
 			{
-				s.cloneError = request.GetError().empty() ? std::string(GetGatewayRequestStateName(request.GetState())) : request.GetError();
-				EDITOR_ERROR_TAG(LOG_TAG, "Gateway download of {} failed: {}", clone.label, s.cloneError);
+				s.cloneError = result.error;
+				EDITOR_ERROR_TAG(LOG_TAG, "Gateway submission {} can't be unpacked: {}", pack.info.sceneryId, result.error);
 				return;
 			}
-
-			const GatewaySceneryPack &pack = *request.scenery;
-			ProjectFile::GatewaySubmission submission;
-			submission.sceneryId = pack.info.sceneryId;
-			submission.icao = pack.icao;
-			submission.airportName = pack.airportName;
-			submission.artist = pack.info.userName;
-			submission.dateUploaded = pack.info.dateUploaded;
-			submission.type = pack.info.type;
-			std::string error;
-			if (!GatewayClient::UnpackScenery(pack, submission.files, &error))
+			if (!result.created)
 			{
-				s.cloneError = error;
-				EDITOR_ERROR_TAG(LOG_TAG, "Gateway submission {} can't be unpacked: {}", pack.info.sceneryId, error);
+				s.cloneError = result.error;
+				EDITOR_ERROR_TAG(LOG_TAG, "Could not clone {}: {}", clone.label, result.error);
 				return;
 			}
-
-			ProjectFile::GatewayCloneReport report;
-			if (!ProjectFile::CreateGatewayCloneProject(submission, clone.spec, report, &error))
-			{
-				s.cloneError = error;
-				EDITOR_ERROR_TAG(LOG_TAG, "Could not clone {}: {}", clone.label, error);
-				return;
-			}
+			const ProjectFile::GatewayCloneReport &report = result.report;
 			EDITOR_INFO_TAG(LOG_TAG, "Cloned {} ({} by {}) into {}: {} files, {} DSF tiles, {} items", clone.label, pack.airportName, pack.info.userName,
 				VFS::ToUtf8(report.folder), report.files, report.tiles, report.items);
 			for (size_t i = 0; i < report.warnings.size() && i < MAX_LOGGED_WARNINGS; ++i)
@@ -392,7 +444,7 @@ namespace SceneryEditorX::ProjectHub
 
 			VFS::Get().Write(CLONE_LOCATION_FILE, VFS::ToUtf8(clone.spec.location));
 			s.cloneName.clear();
-			if (clone.fromCommandLine)
+			if (clone.fromCommandLine || !s.isOpen)		// The hub was closed while the clone was written
 				EditorProjects::RequestOpen(report.projectFile, context);
 			else
 				OpenProject(report.projectFile, context);
@@ -665,18 +717,24 @@ namespace SceneryEditorX::ProjectHub
 			}
 
 			// Clone
-			const bool downloading = s.clone && s.clone->request && !s.clone->request->IsFinished();
-			if (downloading)
+			if (s.clone)
 			{
-				DrawRequestStatus(*s.clone->request, TrF("Downloading {}", s.clone->label));
-				ImGui::SameLine();
-				if (ImGui::SmallButton(TrL("Cancel##hubClone")))
+				if (s.clone->request && !s.clone->request->IsFinished())
 				{
-					s.clone->request->Cancel();
-					s.clone.reset();
+					DrawRequestStatus(*s.clone->request, TrF("Downloading {}", s.clone->label));
+					ImGui::SameLine();
+					if (ImGui::SmallButton(TrL("Cancel##hubClone")))
+					{
+						s.clone->request->Cancel();
+						s.clone.reset();
+					}
 				}
+				else
+					DrawBusy(TrF("Making the project of {}", s.clone->label));	// Unzipping, importing, writing: can't be stopped halfway
 				return;
 			}
+			// The name the folder above shows, whatever name the downloaded submission gives its airport
+			spec.projectName = ProjectFile::GetGatewayCloneName(spec, details.airport.code, details.airport.name);
 			ImGui::BeginDisabled(submission == details.scenery.end() || !problems.empty());
 			const std::string cloneLabel = submission == details.scenery.end() ? std::string(Tr("Clone and Open")) : TrF("Clone {} and Open", submission->sceneryId);
 			if (ImGui::Button(EditorUI::IconLabel(SEDX_ICON_CLOUD_DOWNLOAD, cloneLabel).c_str(), ImVec2(0.0f, 0.0f)))
@@ -994,7 +1052,7 @@ namespace SceneryEditorX::ProjectHub
 		State &s = S();
 		if (s.clone && s.clone->request)
 			s.clone->request->Cancel();
-		s.clone.reset();
+		s.clone.reset();		// A clone being written finishes first (the job's future waits for it)
 		s.listRequest.reset();
 		s.detailsRequest.reset();
 		s.details.reset();

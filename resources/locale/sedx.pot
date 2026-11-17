@@ -979,6 +979,11 @@ msgstr ""
 
 #: source/Editor/core/project_hub.cpp
 #, python-brace-format
+msgid "Making the project of {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
 msgid "Moderator: {}"
 msgstr ""
 
