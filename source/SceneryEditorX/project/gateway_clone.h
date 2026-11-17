@@ -113,9 +113,10 @@ namespace SceneryEditorX::ProjectFile
 
 	/**
 	 * @brief Creates the clone: ValidateGatewayClone, the project (MakeGatewayCloneProject), then the folder with the
-	 * pack's folders, the submission's files (names that would leave the folder are refused, folder entries skipped, and
-	 * of names differing only in case the first is copied, with a warning), "<name>.edX" and the git helper files. Writes
-	 * are atomic; nothing is written when the project can't be made, and a clone failing partway removes what it wrote.
+	 * pack's folders, the submission's files (names that would leave the folder are refused, folder entries skipped, of
+	 * names differing only in case the first is copied, and one named like the project file isn't, with warnings),
+	 * "<name>.edX" and the git helper files (kept when the submission has its own). Writes are atomic; nothing is written
+	 * when the project can't be made, and a clone failing partway removes what it wrote.
 	 */
 	bool CreateGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, GatewayCloneReport &report, std::string *error = nullptr);
 }

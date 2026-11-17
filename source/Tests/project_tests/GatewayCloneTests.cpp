@@ -402,6 +402,27 @@ TEST_CASE("Gateway clone: folder entries are skipped, and of names differing onl
 	CHECK(readmes == 1);	// Even on a disk that tells them apart
 }
 
+TEST_CASE("Gateway clone: a submission file named like the project file isn't copied over it", "[project][gateway][clone]")
+{
+	Scratch scratch;
+	GatewaySubmission submission = TestSubmission();
+	submission.files.push_back(Entry("ktst - test field.EDX", std::string_view("Not a project\n")));
+	submission.files.push_back(Entry(".gitignore", std::string_view("# The submission's own\n")));
+	GatewayCloneSpec spec;
+	spec.location = scratch.path;
+	GatewayCloneReport report;
+	std::string error;
+	REQUIRE(CreateGatewayCloneProject(submission, spec, report, &error));
+	CHECK(report.files == submission.files.size() - 1);
+	CHECK(std::ranges::any_of(report.warnings, [](const std::string &warning) { return warning.find("has the name of the clone's project file") != std::string::npos; }));
+
+	// The project file is the clone's, and the submission's own git file is kept
+	SceneryProject loaded;
+	REQUIRE(LoadProjectFile(report.projectFile, loaded, nullptr, nullptr, &error));
+	CHECK(loaded.airports.size() == 1);
+	CHECK(ReadText(report.folder / ".gitignore") == "# The submission's own\n");
+}
+
 TEST_CASE("Gateway clone: a clone that fails partway leaves nothing behind", "[project][gateway][clone]")
 {
 	Scratch scratch;
@@ -645,10 +666,21 @@ TEST_CASE("Gateway clone: tiles merge into one DSF", "[project][gateway][clone][
 	CHECK(merged.roads[1].startJunction == 3);
 	CHECK(merged.roads[1].endJunction == 4);
 	CHECK(merged.GetExclusions().size() == 2);						// Different zones
-	XPlane::AppendDsf(merged, a);
+	CHECK(XPlane::AppendDsf(merged, a) == 0);
 	CHECK(merged.GetExclusions().size() == 2);						// The same zone isn't listed twice
 	CHECK(merged.west == -124.0);
 	CHECK(merged.east == -122.0);
+
+	// A damaged tile's placements naming definitions it doesn't list are left out, and counted
+	XPlane::DsfFile damaged = a;
+	damaged.objects.front().definition = 99;
+	damaged.polygons.front().definition = 99;
+	damaged.roads.front().definition = 99;
+	const size_t objects = merged.objects.size(), polygons = merged.polygons.size(), roads = merged.roads.size();
+	CHECK(XPlane::AppendDsf(merged, damaged) == 3);
+	CHECK(merged.objects.size() == objects + damaged.objects.size() - 1);
+	CHECK(merged.polygons.size() == polygons + damaged.polygons.size() - 1);
+	CHECK(merged.roads.size() == roads + damaged.roads.size() - 1);
 }
 
 TEST_CASE("Gateway clone: road networks of two tiles stay apart, and joined inside each", "[project][gateway][clone][dsf]")

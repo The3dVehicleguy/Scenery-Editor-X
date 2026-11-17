@@ -199,7 +199,8 @@ namespace SceneryEditorX::ProjectFile
 				report.warnings.push_back(entry->name + " can't be read (" + reason + "): its placements weren't imported");
 				continue;
 			}
-			XPlane::AppendDsf(overlay, tile);
+			if (const size_t dropped = XPlane::AppendDsf(overlay, tile))
+				report.warnings.push_back(entry->name + ": " + std::to_string(dropped) + " placement(s) name a definition the tile doesn't list: left out");
 			++report.tiles;
 		}
 		DsfImport imported = ImportDsfItems(overlay);
@@ -260,6 +261,7 @@ namespace SceneryEditorX::ProjectFile
 		std::vector<std::pair<std::string, const XPlane::ZipEntry *>> files;
 		files.reserve(submission.files.size());
 		std::set<std::string> names;	// Lowercase: Windows' and macOS' disks (and the VFS's lookups) don't tell README from readme
+		const std::string projectFileName = ToLowerAscii(project.info.name + EDX_EXTENSION);
 		for (const XPlane::ZipEntry &entry : submission.files)
 		{
 			if (entry.name.empty() || entry.name.back() == '/' || entry.name.back() == '\\')
@@ -268,6 +270,11 @@ namespace SceneryEditorX::ProjectFile
 			const std::string relative = VFS::NormalizeRelative(entry.name, &escaped);
 			if (escaped || relative.empty() || fs::path(VFS::FromUtf8(entry.name)).has_root_path())
 				return Fail(error, "The submission names a file outside its folder: " + entry.name);
+			if (ToLowerAscii(relative) == projectFileName)
+			{
+				report.warnings.push_back(entry.name + " has the name of the clone's project file: not copied");
+				continue;
+			}
 			if (!names.insert(ToLowerAscii(relative)).second)
 			{
 				report.warnings.push_back(entry.name + " has the name of another file in the submission (but for case): only the first was copied");

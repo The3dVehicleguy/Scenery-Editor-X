@@ -1817,8 +1817,9 @@ namespace SceneryEditorX::XPlane
 		return true;
 	}
 
-	void AppendDsf(DsfFile &into, const DsfFile &from)
+	size_t AppendDsf(DsfFile &into, const DsfFile &from)
 	{
+		size_t dropped = 0;
 		// Where each of from's definitions lands in into's list (one entry per path)
 		const auto map = [](std::vector<std::string> &target, const std::vector<std::string> &source)
 		{
@@ -1841,7 +1842,10 @@ namespace SceneryEditorX::XPlane
 		for (DsfObjectPlacement object : from.objects)
 		{
 			if (object.definition >= objects.size())
+			{
+				++dropped;
 				continue;
+			}
 			object.definition = objects[object.definition];
 			object.filter = -1;
 			into.objects.push_back(object);
@@ -1849,7 +1853,10 @@ namespace SceneryEditorX::XPlane
 		for (DsfPolygonPlacement polygon : from.polygons)
 		{
 			if (polygon.definition >= polygons.size())
+			{
+				++dropped;
 				continue;
+			}
 			polygon.definition = polygons[polygon.definition];
 			polygon.filter = -1;
 			into.polygons.push_back(std::move(polygon));
@@ -1863,7 +1870,10 @@ namespace SceneryEditorX::XPlane
 		for (DsfRoadSegment road : from.roads)
 		{
 			if (road.definition >= networks.size())
+			{
+				++dropped;
 				continue;
+			}
 			road.definition = networks[road.definition];
 			road.startJunction += road.startJunction != 0 ? junctionOffset : 0;
 			road.endJunction += road.endJunction != 0 ? junctionOffset : 0;
@@ -1890,6 +1900,7 @@ namespace SceneryEditorX::XPlane
 			into.east = std::max(into.east, from.east);
 			into.north = std::max(into.north, from.north);
 		}
+		return dropped;
 	}
 
 	std::vector<DsfFile> SplitDsfByTile(const DsfFile &dsf, std::vector<std::string> *warnings)
