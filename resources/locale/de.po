@@ -160,6 +160,7 @@ msgid "Preferences..."
 msgstr "Einstellungen..."
 
 #: source/Editor/core/editor_layer.cpp
+#: source/Editor/core/project_hub.cpp
 msgid "Project"
 msgstr "Projekt"
 
@@ -277,8 +278,16 @@ msgid "Add a new airport (ICAO, name, reference point) to the open project"
 msgstr "Einen neuen Flughafen (ICAO, Name, Bezugspunkt) zum geöffneten Projekt hinzufügen"
 
 #: source/Editor/core/editor_project.cpp
+msgid "Clone Gateway Airport..."
+msgstr ""
+
+#: source/Editor/core/editor_project.cpp
 msgid "Close Project"
 msgstr "Projekt schließen"
+
+#: source/Editor/core/editor_project.cpp
+msgid "Download an airport's Scenery Gateway submission into a project folder outside Custom Scenery and open it"
+msgstr ""
 
 #: source/Editor/core/editor_project.cpp
 msgid "Export Scenery Pack..."
@@ -293,8 +302,17 @@ msgid "New Project..."
 msgstr "Neues Projekt..."
 
 #: source/Editor/core/editor_project.cpp
+#: source/Editor/core/project_hub.cpp
 msgid "Open Project..."
 msgstr "Projekt öffnen..."
+
+#: source/Editor/core/editor_project.cpp
+msgid "Project Hub..."
+msgstr ""
+
+#: source/Editor/core/editor_project.cpp
+msgid "Recent projects, a new airport project, or a Scenery Gateway airport cloned into a folder of your own"
+msgstr ""
 
 #: source/Editor/core/editor_project.cpp
 msgid "Save Project"
@@ -740,6 +758,7 @@ msgstr "Engste Kurve"
 
 #: source/Editor/core/node_tool.cpp
 #: source/Editor/core/project_dialogs.cpp
+#: source/Editor/core/project_hub.cpp
 #: source/Editor/panels/airport_panel.cpp
 #: source/Editor/panels/properties_panel.cpp
 msgid "Type"
@@ -762,6 +781,11 @@ msgstr "Assets, die das Projekt aus seinem eigenen Ordner platziert (objects/...
 #: source/Editor/core/project_dialogs.cpp
 msgid "Author"
 msgstr "Autor"
+
+#: source/Editor/core/project_dialogs.cpp
+#: source/Editor/core/project_hub.cpp
+msgid "Cancel"
+msgstr ""
 
 #: source/Editor/core/project_dialogs.cpp
 msgid "City"
@@ -798,6 +822,7 @@ msgid "ICAO code"
 msgstr "ICAO-Code"
 
 #: source/Editor/core/project_dialogs.cpp
+#: source/Editor/core/project_hub.cpp
 msgid "Project name"
 msgstr "Projektname"
 
@@ -853,6 +878,322 @@ msgstr "Wohin der Viewport blickt"
 msgid "X-Plane 12's Custom Scenery folder: the pack loads in X-Plane where it's made"
 msgstr "Der Ordner Custom Scenery von X-Plane 12: Das Paket wird in X-Plane dort geladen, wo es angelegt wird"
 
+#: source/Editor/core/project_dialogs.cpp
+#, python-brace-format
+msgid "{} field to fix"
+msgid_plural "{} fields to fix"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "(deprecated)"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "3D"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Airport code or name. Enter looks a code up directly"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Another artist is working on this airport for the Gateway: a clone is still yours to edit"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Approved"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Artist"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#: source/Editor/panels/xplane_library_panel.cpp
+msgid "Browse..."
+msgstr "Durchsuchen..."
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Checked out by {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Choose the folder the clone is made in"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Clone an airport from the X-Plane Scenery Gateway into a project folder of your own, outside Custom Scenery."
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Clone and Open"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Clone from Gateway"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Clone from the Scenery Gateway"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Clone into"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Clone {} and Open"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#: source/Editor/panels/airport_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Close"
+msgstr "Schließen"
+
+#: source/Editor/core/project_hub.cpp
+msgid "Code"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Continue Without a Project"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Could not create {}: {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#: source/Editor/panels/airport_panel.cpp
+msgid "Download list"
+msgstr "Liste herunterladen"
+
+#: source/Editor/core/project_hub.cpp
+msgid "Download the submission, make its project folder and open the project"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Downloading the Gateway's airport list"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Downloading {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Folder"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Has scenery"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Looking up {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Moderator: {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#: source/Editor/panels/airport_panel.cpp
+#: source/Editor/panels/facade_editor_panel.cpp
+#: source/Editor/panels/properties_panel.cpp
+msgid "Name"
+msgstr "Name"
+
+#: source/Editor/core/project_hub.cpp
+msgid "Name or folder"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "New Airport Project"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "New Project"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "No airport list: {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid ""
+"No recent projects yet.\n"
+"\n"
+"Start a new airport project, clone an airport from the Scenery Gateway, or open a project file (.edX, .sex or a WorldEditor earth.wed.xml)."
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Only airports with 3D submissions (buildings, objects), not just a 2D layout"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Only airports with an accepted or approved submission"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#: source/Editor/panels/airport_panel.cpp
+#: source/Editor/panels/facade_editor_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Open"
+msgstr "Öffnen"
+
+#: source/Editor/core/project_hub.cpp
+msgid "Open a project file: .edX, .sex or a WorldEditor earth.wed.xml"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Open the Project Hub when the editor starts (File > Project Hub... opens it any time)"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Opened"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Opening {} once the X-Plane library is indexed"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid ""
+"Pick an airport on the left (or type its code and press Enter) to see its Gateway submissions.\n"
+"\n"
+"Cloning one makes a project of your own from it, in a folder outside X-Plane's Custom Scenery: the airport and its scenery become editable items, and X-Plane keeps flying the version it has."
+msgstr ""
+
+#. The window the editor starts on: recent projects, a new project, a Gateway airport to clone
+#: source/Editor/core/project_hub.cpp
+msgid "Project Hub"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Recent Projects"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Recommended: the submission X-Plane ships"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Refresh"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Remove from List"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "Remove {} missing"
+msgid_plural "Remove {} missing"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Retry"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Show at startup"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Show in Folder"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Status"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Submission"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Take the project off this list (its files stay where they are)"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Take the projects whose file is gone off the list (nothing is deleted)"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "The airport's page on gateway.x-plane.com"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "The list of every Gateway airport (about 20 MB, kept for a day)"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "The open project has unsaved changes: you'll be asked about them before another project opens."
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "The project folder and the project file are named after it (empty: \"ICAO - Name\")"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "This is inside X-Plane's Custom Scenery: X-Plane will load the copy next to the airport it already has. Pick a folder elsewhere to work on it on its own."
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "Uploaded"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#: source/Editor/panels/airport_panel.cpp
+msgid "Website"
+msgstr "Website"
+
+#: source/Editor/core/project_hub.cpp
+msgid "missing"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "not on the Gateway"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+msgid "open"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid ""
+"{}\n"
+"The file isn't there any more"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "{} airports, list from {}"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "{} couldn't be opened: the CONSOLE panel says why"
+msgstr ""
+
+#: source/Editor/core/project_hub.cpp
+#, python-brace-format
+msgid "{} submission"
+msgid_plural "{} submissions"
+msgstr[0] ""
+msgstr[1] ""
+
 #. A section header in a panel, shown in capitals: write it in capitals too if your script has them.
 #: source/Editor/panels/airport_panel.cpp
 #: source/Editor/panels/properties_panel.cpp
@@ -896,9 +1237,12 @@ msgid "CONTENTS"
 msgstr "INHALT"
 
 #: source/Editor/panels/airport_panel.cpp
-#: source/Editor/panels/project_panel.cpp
-msgid "Close"
-msgstr "Schließen"
+msgid "Clone as Project..."
+msgstr ""
+
+#: source/Editor/panels/airport_panel.cpp
+msgid "Clone the selected (or recommended) submission into a project folder of your own, outside Custom Scenery, and edit it there"
+msgstr ""
 
 #: source/Editor/panels/airport_panel.cpp
 msgid "Code (ICAO, IATA, FAA, local), name, city or country; several words narrow it down"
@@ -916,10 +1260,6 @@ msgstr "Ein Szenerie-Paket mit einem neuen Flughafen anlegen"
 #: source/Editor/panels/project_panel.cpp
 msgid "Datum"
 msgstr "Bezugspunkt"
-
-#: source/Editor/panels/airport_panel.cpp
-msgid "Download list"
-msgstr "Liste herunterladen"
 
 #: source/Editor/panels/airport_panel.cpp
 msgid "Download the submission X-Plane ships and open it as a scenery pack"
@@ -1006,12 +1346,6 @@ msgid "METADATA"
 msgstr "METADATEN"
 
 #: source/Editor/panels/airport_panel.cpp
-#: source/Editor/panels/facade_editor_panel.cpp
-#: source/Editor/panels/properties_panel.cpp
-msgid "Name"
-msgstr "Name"
-
-#: source/Editor/panels/airport_panel.cpp
 msgid "New Airport..."
 msgstr "Neuer Flughafen..."
 
@@ -1022,12 +1356,6 @@ msgid ""
 msgstr ""
 "Kein Flughafen geöffnet.\n"
 "Einen unter „Installiert“ doppelklicken, einen aus dem Gateway holen oder einen neuen anlegen."
-
-#: source/Editor/panels/airport_panel.cpp
-#: source/Editor/panels/facade_editor_panel.cpp
-#: source/Editor/panels/project_panel.cpp
-msgid "Open"
-msgstr "Öffnen"
 
 #: source/Editor/panels/airport_panel.cpp
 msgid "Open an airport data file from anywhere"
@@ -1105,10 +1433,6 @@ msgstr "PRÜFUNG"
 #: source/Editor/panels/airport_panel.cpp
 msgid "VALIDATION (PROBLEMS)"
 msgstr "PRÜFUNG (PROBLEME)"
-
-#: source/Editor/panels/airport_panel.cpp
-msgid "Website"
-msgstr "Website"
 
 #: source/Editor/panels/airport_panel.cpp
 msgid "Where the airport datum (and the first runway) goes; WGS84 degrees"
@@ -2779,10 +3103,6 @@ msgid ""
 msgstr ""
 "Damit das Fassadenwerkzeug aktivieren (B): ein Polygon, Rechteck, einen Kreis oder eine Linie im Viewport zeichnen.\n"
 "Oder auf den Boden ziehen für einen Standardgrundriss"
-
-#: source/Editor/panels/xplane_library_panel.cpp
-msgid "Browse..."
-msgstr "Durchsuchen..."
 
 #: source/Editor/panels/xplane_library_panel.cpp
 msgid "Clear all filters"
