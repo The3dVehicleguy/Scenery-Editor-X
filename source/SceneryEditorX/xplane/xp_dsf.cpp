@@ -1839,6 +1839,10 @@ namespace SceneryEditorX::XPlane
 		const std::vector<uint32_t> networks = map(into.networkDefinitions, from.networkDefinitions);
 
 		const bool hadContent = !into.objects.empty() || !into.polygons.empty() || !into.roads.empty() || into.west != into.east;
+
+		// Filters are dropped: a placement's filter indexes its own tile's sim/filter/aptid properties, which aren't merged
+		// (two tiles may number the same airport differently). The merged DSF is read for its placements (a Gateway pack's
+		// all belong to its one airport); writing a DSF again assigns filters from the project (ExportSceneryPack).
 		for (DsfObjectPlacement object : from.objects)
 		{
 			if (object.definition >= objects.size())
