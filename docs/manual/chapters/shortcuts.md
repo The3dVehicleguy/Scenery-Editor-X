@@ -9,6 +9,7 @@ Shortcuts never fire while you're typing in a field. Tool and camera keys only w
 <!-- class: shortcuts -->
 | Shortcut | Action |
 |---|---|
+| <kbd>Ctrl+Shift+O</kbd> | Project Hub (recent projects, new project, clone from the Gateway) |
 | <kbd>Ctrl+N</kbd> | New project |
 | <kbd>Ctrl+O</kbd> | Open project |
 | <kbd>Ctrl+S</kbd> | Save the project (or the open airport, when no project is open) |

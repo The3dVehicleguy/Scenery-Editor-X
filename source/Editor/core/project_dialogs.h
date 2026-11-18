@@ -70,6 +70,23 @@ namespace SceneryEditorX::ProjectDialogs
 	/* @brief Opens the form's airport fields to add a new airport to the open project. */
 	void OpenAddAirport();
 
+	/* @brief What the New Project form did this frame. */
+	enum class FormResult
+	{
+		None,
+		Created,		// The project was created and opened (or is waiting behind the unsaved-changes question)
+		Cancelled
+	};
+
+	/* @brief Starts the form over for the Project Hub: a new airport (or scenery) project, the folder and author kept. */
+	void PrepareNewProjectForm(bool airport = true);
+
+	/**
+	 * @brief Draws the New Project form (project kind, fields, Create) into the current window: the Project Hub's New
+	 * page. Opening the created project asks about the open project's unsaved changes first.
+	 */
+	FormResult DrawNewProjectForm(EditorContext *context);
+
 	/* @brief Opens the Export Scenery Pack dialog for the open project. */
 	void OpenExport();
 

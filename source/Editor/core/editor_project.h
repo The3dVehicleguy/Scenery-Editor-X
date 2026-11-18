@@ -106,6 +106,17 @@ namespace SceneryEditorX::EditorProjects
 	/* @brief Opens a project once the X-Plane library index is ready (like --project). */
 	void OpenWhenReady(const std::filesystem::path &path);
 
+	/**
+	 * @brief Opens a project chosen in the Project Hub: now (asking about unsaved changes first), or, while the X-Plane
+	 * library is still being indexed after startup and no project is open, as soon as the index is ready so its art
+	 * resolves on the first build.
+	 * @return False when it couldn't be opened (the log says why); true when it opened or will open.
+	 */
+	bool RequestOpen(const std::filesystem::path &path, EditorContext *context);
+
+	/* @brief The project waiting for the library index to open (RequestOpen, OpenWhenReady, --project), empty when none. */
+	std::filesystem::path GetWaitingProject();
+
 	/* @brief Saves the project (Save As for one without a file). */
 	bool Save();
 	bool SaveAs();

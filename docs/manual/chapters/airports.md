@@ -139,6 +139,10 @@ The [X-Plane Scenery Gateway](https://gateway.x-plane.com) is the community's sh
 6. Leave **Add to the top** ticked to list the pack first in `scenery_packs.ini`, so X-Plane loads it with top priority.
 7. Click **Install**. The editor downloads the submission, unpacks the scenery pack inside it and opens its airport.
 
+To work on the airport rather than fly it, click **Clone as Project…** instead: the Project Hub copies the selected
+(or recommended) submission into a project folder of your own, outside `Custom Scenery`, and opens it as a project. See
+[Cloning an airport from the Scenery Gateway](projects.md#cloning-an-airport-from-the-scenery-gateway).
+
 A right-click on an airport in the **Installed** list also offers **Show on the Gateway website** and **Look up on the Gateway**.
 
 Downloads are cached in `%LOCALAPPDATA%\SceneryEditorX\cache\gateway`, so installing the same submission again doesn't download it twice.

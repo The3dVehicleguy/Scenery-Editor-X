@@ -1817,6 +1817,96 @@ namespace SceneryEditorX::XPlane
 		return true;
 	}
 
+	size_t AppendDsf(DsfFile &into, const DsfFile &from)
+	{
+		size_t dropped = 0;
+		// Where each of from's definitions lands in into's list (one entry per path)
+		const auto map = [](std::vector<std::string> &target, const std::vector<std::string> &source)
+		{
+			std::vector<uint32_t> indices;
+			indices.reserve(source.size());
+			for (const std::string &definition : source)
+			{
+				const auto found = std::ranges::find(target, definition);
+				indices.push_back(static_cast<uint32_t>(found - target.begin()));
+				if (found == target.end())
+					target.push_back(definition);
+			}
+			return indices;
+		};
+		const std::vector<uint32_t> objects = map(into.objectDefinitions, from.objectDefinitions);
+		const std::vector<uint32_t> polygons = map(into.polygonDefinitions, from.polygonDefinitions);
+		const std::vector<uint32_t> networks = map(into.networkDefinitions, from.networkDefinitions);
+
+		const bool hadContent = !into.objects.empty() || !into.polygons.empty() || !into.roads.empty() || into.west != into.east;
+
+		// Filters are dropped: a placement's filter indexes its own tile's sim/filter/aptid properties, which aren't merged
+		// (two tiles may number the same airport differently). The merged DSF is read for its placements (a Gateway pack's
+		// all belong to its one airport); writing a DSF again assigns filters from the project (ExportSceneryPack).
+		for (DsfObjectPlacement object : from.objects)
+		{
+			if (object.definition >= objects.size())
+			{
+				++dropped;
+				continue;
+			}
+			object.definition = objects[object.definition];
+			object.filter = -1;
+			into.objects.push_back(object);
+		}
+		for (DsfPolygonPlacement polygon : from.polygons)
+		{
+			if (polygon.definition >= polygons.size())
+			{
+				++dropped;
+				continue;
+			}
+			polygon.definition = polygons[polygon.definition];
+			polygon.filter = -1;
+			into.polygons.push_back(std::move(polygon));
+		}
+		// Junction ids are 1 and up (in a DSF's road pool 0 marks a shape point, and WriteDsf refuses a segment end without
+		// one): from's ids move past into's highest, so the two networks don't join at junctions that only share a number,
+		// while segments that meet at a junction inside from still meet. An end left at 0 (not set) stays 0.
+		uint32_t junctionOffset = 0;
+		for (const DsfRoadSegment &road : into.roads)
+			junctionOffset = std::max({ junctionOffset, road.startJunction, road.endJunction });
+		for (DsfRoadSegment road : from.roads)
+		{
+			if (road.definition >= networks.size())
+			{
+				++dropped;
+				continue;
+			}
+			road.definition = networks[road.definition];
+			road.startJunction += road.startJunction != 0 ? junctionOffset : 0;
+			road.endJunction += road.endJunction != 0 ? junctionOffset : 0;
+			road.filter = -1;
+			into.roads.push_back(std::move(road));
+		}
+		for (const auto &property : from.properties)
+		{
+			if (property.first.starts_with("sim/exclude_") && std::ranges::find(into.properties, property) == into.properties.end())
+				into.properties.push_back(property);
+		}
+
+		if (!hadContent)
+		{
+			into.west = from.west;
+			into.south = from.south;
+			into.east = from.east;
+			into.north = from.north;
+		}
+		else if (from.west != from.east)
+		{
+			into.west = std::min(into.west, from.west);
+			into.south = std::min(into.south, from.south);
+			into.east = std::max(into.east, from.east);
+			into.north = std::max(into.north, from.north);
+		}
+		return dropped;
+	}
+
 	std::vector<DsfFile> SplitDsfByTile(const DsfFile &dsf, std::vector<std::string> *warnings)
 	{
 		using TileKey = std::pair<int, int>;	// south, west

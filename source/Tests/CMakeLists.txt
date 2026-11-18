@@ -377,6 +377,8 @@ ADD_EXECUTABLE(ProjectFormatTests
     ${CMAKE_CURRENT_SOURCE_DIR}/project_tests/VfsTests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/project_tests/SceneryPackTests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/project_tests/FacadeEditTests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/project_tests/DsfImportTests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/project_tests/GatewayCloneTests.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/filesystem/vfs.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/project/spline_edit.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/project/facade_edit.cpp
@@ -390,6 +392,7 @@ ADD_EXECUTABLE(ProjectFormatTests
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/project/project_document.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/project/project_dsf.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/project/scenery_pack.cpp
+    ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/project/gateway_clone.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/xplane/xp_airport_document.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/xplane/xp_airport_index.cpp
     ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/xplane/xp_apt.cpp

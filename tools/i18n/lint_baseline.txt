@@ -98,7 +98,6 @@ source/Editor/core/node_tool.cpp	Click a node (Ctrl+A: all)
 source/Editor/core/node_tool.cpp	None (drag its grip in the viewport)
 source/Editor/core/node_tool.cpp	None (straight segments)
 source/Editor/core/node_tool.cpp	Radius %.1f m
-source/Editor/core/project_dialogs.cpp	%s  %zu %s to fix
 source/Editor/core/project_dialogs.cpp	%s  %zu airports, %zu DSF tiles (%zu objects, %zu polygons), %zu art files copied, %zu files written
 source/Editor/core/project_dialogs.cpp	%s  Export %s as an X-Plane 12 scenery pack
 source/Editor/core/project_dialogs.cpp	%s  No problems found
@@ -107,7 +106,6 @@ source/Editor/core/project_dialogs.cpp	Airport
 source/Editor/core/project_dialogs.cpp	Airports  (Earth nav data/apt.dat)
 source/Editor/core/project_dialogs.cpp	Browse...##export
 source/Editor/core/project_dialogs.cpp	Browse...##location
-source/Editor/core/project_dialogs.cpp	Cancel
 source/Editor/core/project_dialogs.cpp	Close
 source/Editor/core/project_dialogs.cpp	Custom Scenery
 source/Editor/core/project_dialogs.cpp	Decimal degrees with up to 8 places. North and east are positive, south and west negative: 50 degrees 30 minutes south is -50.50000000. Headings in the project are true, not magnetic.
