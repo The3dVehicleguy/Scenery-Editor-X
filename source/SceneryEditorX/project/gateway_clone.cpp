@@ -56,6 +56,11 @@ namespace SceneryEditorX::ProjectFile
 			return false;
 		}
 
+		bool Cancelled(const std::atomic<bool> *cancel)
+		{
+			return cancel && cancel->load(std::memory_order_relaxed);
+		}
+
 		std::string ToLowerAscii(std::string_view text)
 		{
 			std::string out(text);
@@ -145,7 +150,8 @@ namespace SceneryEditorX::ProjectFile
 		return problems;
 	}
 
-	bool MakeGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, SceneryProject &out, GatewayCloneReport &report, std::string *error)
+	bool MakeGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, SceneryProject &out, GatewayCloneReport &report, std::string *error,
+		const std::atomic<bool> *cancel)
 	{
 		report = {};
 
@@ -193,6 +199,8 @@ namespace SceneryEditorX::ProjectFile
 		std::ranges::sort(tiles, {}, [](const XPlane::ZipEntry *entry) { return NormalizedName(entry->name); });	// Same order whatever the zip's
 		for (const XPlane::ZipEntry *entry : tiles)
 		{
+			if (Cancelled(cancel))
+				return Fail(error, "Cancelled");
 			XPlane::DsfFile tile;
 			if (!XPlane::ReadDsf(entry->data.data(), entry->data.size(), tile, &reason))
 			{
@@ -246,13 +254,14 @@ namespace SceneryEditorX::ProjectFile
 		return true;
 	}
 
-	bool CreateGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, GatewayCloneReport &report, std::string *error)
+	bool CreateGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, GatewayCloneReport &report, std::string *error,
+		const std::atomic<bool> *cancel)
 	{
 		report = {};
 
 		// Everything that can fail without writing first: the project, the folder, and the file names
 		SceneryProject project;
-		if (!MakeGatewayCloneProject(submission, spec, project, report, error))
+		if (!MakeGatewayCloneProject(submission, spec, project, report, error, cancel))
 			return false;
 		GatewayCloneSpec named = spec;
 		named.projectName = project.info.name;	// The name it got (the airport's own id and name when the submission's are missing)
@@ -282,57 +291,101 @@ namespace SceneryEditorX::ProjectFile
 			}
 			files.emplace_back(relative, &entry);
 		}
+		// A file named like a folder another file is in ("a" and "a/b"), or like one of the pack's folders, can't be written
+		for (const std::string &folder : GetPackFolders())
+		{
+			if (names.contains(ToLowerAscii(folder)))
+				return Fail(error, "The submission has a file named like the pack's folder " + folder);
+		}
+		for (const auto &[relative, entry] : files)
+		{
+			const std::string lower = ToLowerAscii(relative);
+			for (size_t slash = lower.find('/'); slash != std::string::npos; slash = lower.find('/', slash + 1))
+			{
+				if (names.contains(lower.substr(0, slash)))
+					return Fail(error, "The submission has a file named like the folder of another: " + relative.substr(0, slash) + " and " + relative);
+			}
+		}
 
 		report.folder = GetGatewayCloneFolder(named, submission.icao, submission.airportName);
 
-		// A clone that fails partway takes back what it wrote, so the same name can be tried again. The folder was missing or
-		// empty when it was checked above, so everything in it now is this clone's. Declared before the VFS: it runs last.
+		// A clone that fails partway takes back what it wrote, so the same name can be tried again: the files it wrote and the
+		// folders it made (once empty), and nothing else, since the folder can gain files while the clone runs. Declared
+		// before the VFS: it runs last.
 		struct Undo
 		{
-			fs::path folder;
-			bool existed = false;
+			std::vector<fs::path> files;	// Written, or being written
+			std::vector<fs::path> folders;	// Made by the clone, parents first
+			std::set<fs::path> known;		// Folders seen: made by the clone or there already
 			bool keep = false;
+
+			/* @brief Notes which folders from `root` down to root / `relative` don't exist yet, before they're made. */
+			bool NoteFolders(const fs::path &root, const fs::path &relative)
+			{
+				fs::path folder = root;
+				for (auto part = relative.begin(); ; ++part)
+				{
+					if (known.insert(folder).second)
+					{
+						std::error_code ec;
+						const bool exists = fs::exists(folder, ec);
+						if (ec)
+							return false;
+						if (!exists)
+							folders.push_back(folder);
+					}
+					if (part == relative.end())
+						return true;
+					folder /= *part;
+				}
+			}
 
 			~Undo()
 			{
 				if (keep)
 					return;
 				std::error_code ec;
-				if (!existed)
-				{
-					fs::remove_all(folder, ec);
-					return;
-				}
-				std::vector<fs::path> children;
-				for (fs::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
-					children.push_back(it->path());
-				for (const fs::path &child : children)
-					fs::remove_all(child, ec);
+				for (const fs::path &file : files)
+					fs::remove(file, ec);
+				for (auto folder = folders.rbegin(); folder != folders.rend(); ++folder)
+					fs::remove(*folder, ec);	// Only when empty
 			}
 		};
 		Undo undo;
-		undo.folder = report.folder;
-		std::error_code ec;
-		undo.existed = fs::exists(report.folder, ec);
-		undo.keep = static_cast<bool>(ec);		// Can't tell what was there: leave it alone
+		const fs::path packRoot = report.folder;
+		// Can't tell what was there: leave everything alone on failure
+		const auto note = [&undo, &packRoot](const fs::path &relativeFolder) {
+			if (!undo.keep && !undo.NoteFolders(packRoot, relativeFolder))
+				undo.keep = true;
+		};
+		note({});
 
 		VFS::FileSystem vfs;
 		if (!vfs.Mount(CLONE, report.folder, false, error))
 			return false;
 		for (const std::string &folder : GetPackFolders())
 		{
+			note(VFS::FromUtf8(folder));
 			if (!vfs.CreateFolders(VFS::MakeVirtualPath(CLONE, folder), error))
 				return false;
 		}
 		for (const auto &[relative, entry] : files)
 		{
+			if (Cancelled(cancel))
+				return Fail(error, "Cancelled");
+			const fs::path path = VFS::FromUtf8(relative);
+			note(path.parent_path());
+			undo.files.push_back(report.folder / path);
 			const std::string_view bytes(reinterpret_cast<const char *>(entry->data.data()), entry->data.size());
 			if (!vfs.Write(VFS::MakeVirtualPath(CLONE, relative), bytes, error))
 				return false;
 			++report.files;
 		}
+		if (Cancelled(cancel))
+			return Fail(error, "Cancelled");
 
 		report.projectFile = report.folder / VFS::FromUtf8(project.info.name + EDX_EXTENSION);
+		undo.files.push_back(report.projectFile);
 		std::vector<std::string> warnings;
 		if (!SaveProjectFile(report.projectFile, project, ProjectFormat::Edx, &warnings, error))
 			return false;

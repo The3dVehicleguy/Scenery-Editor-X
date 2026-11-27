@@ -35,6 +35,7 @@
 #include "editor_welcome.h"
 #include "project_dialogs.h"
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -92,6 +93,7 @@ namespace SceneryEditorX::ProjectHub
 			std::string label;					// "KSEA #123456"
 			bool fromCommandLine = false;
 			std::future<CloneResult> job;		// Valid once downloaded: unpacking, importing and writing it off the UI thread
+			std::shared_ptr<std::atomic<bool>> cancel = std::make_shared<std::atomic<bool>>(false);	// Set: the job stops and takes back what it wrote
 		};
 
 		struct State
@@ -364,7 +366,8 @@ namespace SceneryEditorX::ProjectHub
 		 * @brief The slow part of a clone, run on a job thread: unzipping the submission, reading and importing its DSF tiles
 		 * (a large airport's take a while) and writing the folder. It touches nothing but its arguments.
 		 */
-		CloneResult MakeClone(const std::shared_ptr<const GatewaySceneryPack> pack, const ProjectFile::GatewayCloneSpec spec)
+		CloneResult MakeClone(const std::shared_ptr<const GatewaySceneryPack> pack, const ProjectFile::GatewayCloneSpec spec,
+			const std::shared_ptr<const std::atomic<bool>> cancel)
 		{
 			CloneResult result;
 			try
@@ -379,7 +382,7 @@ namespace SceneryEditorX::ProjectHub
 				if (!GatewayClient::UnpackScenery(*pack, submission.files, &result.error))
 					return result;
 				result.unpacked = true;
-				result.created = ProjectFile::CreateGatewayCloneProject(submission, spec, result.report, &result.error);
+				result.created = ProjectFile::CreateGatewayCloneProject(submission, spec, result.report, &result.error, cancel.get());
 			}
 			catch (const std::exception &exception)
 			{
@@ -412,7 +415,7 @@ namespace SceneryEditorX::ProjectHub
 					s.clone.reset();
 					return;
 				}
-				s.clone->job = std::async(std::launch::async, MakeClone, request.scenery, s.clone->spec);
+				s.clone->job = std::async(std::launch::async, MakeClone, request.scenery, s.clone->spec, s.clone->cancel);
 				return;
 			}
 			if (s.clone->job.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
@@ -1052,7 +1055,9 @@ namespace SceneryEditorX::ProjectHub
 		State &s = S();
 		if (s.clone && s.clone->request)
 			s.clone->request->Cancel();
-		s.clone.reset();		// A clone being written finishes first (the job's future waits for it)
+		if (s.clone)
+			s.clone->cancel->store(true, std::memory_order_relaxed);	// A clone being written stops at its next tile or file and takes back what it wrote
+		s.clone.reset();		// The job's future waits for that
 		s.listRequest.reset();
 		s.detailsRequest.reset();
 		s.details.reset();

@@ -32,6 +32,7 @@
 #include "scenery_pack.h"
 #include "scenery_project.h"
 #include <SceneryEditorX/xplane/xp_zip.h>
+#include <atomic>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -109,16 +110,21 @@ namespace SceneryEditorX::ProjectFile
 	 * airports none of which is the submission's fails.
 	 */
 	bool MakeGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, SceneryProject &out, GatewayCloneReport &report,
-		std::string *error = nullptr);
+		std::string *error = nullptr, const std::atomic<bool> *cancel = nullptr);
 
 	/**
 	 * @brief Creates the clone: ValidateGatewayClone, the project (MakeGatewayCloneProject), then the folder with the
 	 * pack's folders, the submission's files (names that would leave the folder are refused, folder entries skipped, of
-	 * names differing only in case the first is copied, and one named like the project file isn't, with warnings),
-	 * "<name>.edX" and the git helper files (kept when the submission has its own). Writes are atomic; nothing is written
-	 * when the project can't be made, and a clone failing partway removes what it wrote.
+	 * names differing only in case the first is copied, and one named like the project file isn't, with warnings; a file
+	 * named like another's folder fails), "<name>.edX" and the git helper files (kept when the submission has its own).
+	 * Writes are atomic; nothing is written when the project can't be made, and a clone failing partway removes the files
+	 * and folders it made (only those: anything else put in the folder meanwhile stays).
+	 *
+	 * @param cancel Set from another thread to stop the clone between DSF tiles and between files; it then fails ("Cancelled")
+	 * and removes what it wrote. Null: it can't be cancelled.
 	 */
-	bool CreateGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, GatewayCloneReport &report, std::string *error = nullptr);
+	bool CreateGatewayCloneProject(const GatewaySubmission &submission, const GatewayCloneSpec &spec, GatewayCloneReport &report, std::string *error = nullptr,
+		const std::atomic<bool> *cancel = nullptr);
 }
 
 // -------------------------------------------------------

@@ -428,7 +428,7 @@ TEST_CASE("Gateway clone: a clone that fails partway leaves nothing behind", "[p
 	Scratch scratch;
 	const GatewaySubmission submission = TestSubmission();
 	GatewaySubmission broken = submission;
-	broken.files.push_back(Entry("README.txt/inner.txt", std::string_view("x")));	// README.txt is a file by then: this write fails
+	broken.files.push_back(Entry("KTST - Test Field.edX/inner.txt", std::string_view("x")));	// A folder where the project file goes: saving it fails
 	GatewayCloneSpec spec;
 	spec.location = scratch.path;
 	const fs::path folder = scratch.path / "KTST - Test Field";
@@ -456,6 +456,42 @@ TEST_CASE("Gateway clone: a clone that fails partway leaves nothing behind", "[p
 	REQUIRE(CreateGatewayCloneProject(submission, spec, report, &error));
 	CHECK(fs::is_regular_file(folder / "KTST - Test Field.edX"));
 	CHECK(std::distance(fs::directory_iterator(scratch.path), fs::directory_iterator()) == 1);	// Nothing else left beside it
+}
+
+TEST_CASE("Gateway clone: a file named like another's folder fails before anything is written", "[project][gateway][clone]")
+{
+	Scratch scratch;
+	GatewayCloneSpec spec;
+	spec.location = scratch.path;
+	for (const char *name : { "README.txt/inner.txt", "readme.TXT/inner.txt", "Objects" })
+	{
+		INFO(name);
+		GatewaySubmission submission = TestSubmission();
+		submission.files.push_back(Entry(name, std::string_view("x")));
+		GatewayCloneReport report;
+		std::string error;
+		CHECK_FALSE(CreateGatewayCloneProject(submission, spec, report, &error));
+		CHECK(error.find("named like") != std::string::npos);
+		CHECK(report.files == 0);
+		CHECK(fs::is_empty(scratch.path));
+	}
+}
+
+TEST_CASE("Gateway clone: a cancelled clone fails and leaves nothing behind", "[project][gateway][clone]")
+{
+	Scratch scratch;
+	const GatewaySubmission submission = TestSubmission();
+	GatewayCloneSpec spec;
+	spec.location = scratch.path;
+	GatewayCloneReport report;
+	std::string error;
+	const std::atomic<bool> cancel = true;
+	CHECK_FALSE(CreateGatewayCloneProject(submission, spec, report, &error, &cancel));
+	CHECK(error == "Cancelled");
+	CHECK(fs::is_empty(scratch.path));
+
+	const std::atomic<bool> go = false;
+	CHECK(CreateGatewayCloneProject(submission, spec, report, &error, &go));
 }
 
 TEST_CASE("Gateway clone: the folder made is the one that was checked", "[project][gateway][clone]")

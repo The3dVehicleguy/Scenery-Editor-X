@@ -24,6 +24,9 @@ versions.
   two names differing only in case the first is copied, with a warning (0.2.116.617); names lose line ends around
   them as well as spaces (0.2.117.618); a damaged tile's placements that name no listed definition are reported,
   and a submission file named like the project file isn't copied over it (0.2.118.619).
+  Quitting while a clone is written stops it at its next tile or file instead of waiting for it; a clone that fails or
+  is stopped removes only the files and folders it made, and a submission with a file named like another's folder is
+  refused before anything is written (0.2.119.620).
   The AIRPORTS panel's Gateway tab gains **Clone as Project…**. Command line: `--project-hub
   [recent|new|gateway]`, `--gateway-clone "<scenery id>[;folder]"`. For developers: `ProjectFile::ImportDsfItems`
   (a DSF's placements as project items, the inverse of `BuildProjectDsf`, polygons top of the hierarchy first),
