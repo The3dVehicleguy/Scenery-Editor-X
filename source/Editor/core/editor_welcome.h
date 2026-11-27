@@ -62,6 +62,9 @@ namespace SceneryEditorX::EditorWelcome
 
 	/* @brief Opens the welcome again (Help menu). */
 	void OpenWelcome();
+
+	/* @brief True while the welcome modal is open or about to open (the Project Hub waits for it). Call outside any popup. */
+	bool IsShowing();
 }
 
 // -------------------------------------------------------

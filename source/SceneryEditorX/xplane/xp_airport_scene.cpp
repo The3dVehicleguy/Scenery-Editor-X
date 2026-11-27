@@ -150,11 +150,20 @@ namespace SceneryEditorX::XPlane
 		 * markers. Reverse-Z depth keeps millimeters apart out to a few kilometers. Transparent (surface 15) runways,
 		 * pavement and helipads sit just above the boundary, under every DSF group: X-Plane draws nothing for them, so
 		 * the pack's own art (its orthophotos and pavement polygons) must cover their editing tint.
+		 * Nothing sits at 0: that is the terrain's own surface, and the g-buffer pass tests drapes against the terrain's
+		 * depth, so a drape in the terrain's plane is left to rounding and the terrain covers stretches of it (the boundary
+		 * until 0.2.101.602). A millimeter is about ten times the rounding of positions a kilometer out.
 		 */
-		constexpr float HEIGHT_BOUNDARY = 0.00f;
+		constexpr float HEIGHT_BOUNDARY = 0.001f;
 		constexpr float HEIGHT_TRANSPARENT = 0.002f;
+		static_assert(HEIGHT_BOUNDARY > 0.0f && HEIGHT_TRANSPARENT - 0.0005f > HEIGHT_BOUNDARY, "Drapes sit above the terrain, the boundary lowest");
 		constexpr float HEIGHT_PAVEMENT = 0.03f;
+		constexpr float PAVEMENT_STEP_MAX = 0.003f;		// apt.dat pavement rows this far apart at most (first on top) ...
+		constexpr float PAVEMENT_STACK_MAX = 0.3f;		// ... and all of them within this
 		constexpr float HEIGHT_RUNWAY_ABOVE_PAVEMENT = 0.02f;
+		// So the runway height tops out under 0.4 m, where the 4 um rank steps of GetRunwaySurfaceLift (what decides crossing
+		// runways) stay apart in float; OverlayTests checks them on 0.4 m
+		static_assert(HEIGHT_PAVEMENT + PAVEMENT_STACK_MAX + HEIGHT_RUNWAY_ABOVE_PAVEMENT <= 0.4f, "Runway rank lifts need the runway height under 0.4 m");
 		constexpr float HEIGHT_HELIPAD_EXTRA = 0.01f;
 		constexpr float HEIGHT_LINES_EXTRA = 0.03f;
 		constexpr float HEIGHT_LIGHTS_EXTRA = 0.04f;
@@ -681,7 +690,7 @@ namespace SceneryEditorX::XPlane
 
 			// Pavement: first in the file draws on top, so later polygons sit lower.
 			const size_t pavementCount = airport.pavements.size();
-			const float pavementStep = pavementCount > 1 ? std::min(0.003f, 0.3f / static_cast<float>(pavementCount)) : 0.0f;
+			const float pavementStep = pavementCount > 1 ? std::min(PAVEMENT_STEP_MAX, PAVEMENT_STACK_MAX / static_cast<float>(pavementCount)) : 0.0f;
 			const float pavementTop = HEIGHT_PAVEMENT + pavementStep * static_cast<float>(pavementCount);
 			const float runwayHeight = pavementTop + HEIGHT_RUNWAY_ABOVE_PAVEMENT;
 			const float lineHeight = runwayHeight + HEIGHT_LINES_EXTRA;
@@ -823,6 +832,8 @@ namespace SceneryEditorX::XPlane
 				}
 			}
 
+			// Crossing runways: the higher-ranked one's surface on top (the overlay builder cuts the others' markings)
+			const std::vector<uint32_t> runwayRanks = GetRunwayRanks(airport.runways);
 			for (size_t i = 0; i < airport.runways.size(); ++i)
 			{
 				const AptRunway &runway = airport.runways[i];
@@ -853,7 +864,7 @@ namespace SceneryEditorX::XPlane
 				{
 					Point2 corners[4];
 					GetRunwayCorners(runway, projection, corners, false);
-					EmitQuad(part, corners, FlatHeight(part.paint, runwayHeight));
+					EmitQuad(part, corners, FlatHeight(part.paint, runwayHeight + GetRunwaySurfaceLift(runwayRanks[i], airport.runways.size())));
 				}
 
 				// Blast pads, a shade lower so the runway proper reads on top
@@ -2203,6 +2214,13 @@ namespace SceneryEditorX::XPlane
 			}
 			rows.insert({ static_cast<int>(element.kind), element.index });
 		}
+		// Crossing runways depend on each other (which is on top, whose markings are cut where: GetRunwayRanks), so an
+		// edited runway rebuilds them all
+		if (std::ranges::any_of(rows, [](const std::pair<int, uint32_t> &row) { return row.first == static_cast<int>(AirportElementKind::Runway); }))
+		{
+			for (uint32_t i = 0; i < document.airport.runways.size(); ++i)
+				rows.insert({ static_cast<int>(AirportElementKind::Runway), i });
+		}
 		const ElementFilter filter = [&rows](const AirportElementKind kind, const uint32_t index) { return rows.contains({ static_cast<int>(kind), index }); };
 		RebuildAptLayer(*s_Loaded, document, &filter);
 	}
@@ -2463,6 +2481,9 @@ namespace SceneryEditorX::XPlane
 		const float yaw = yawDegrees * kDegToRad;
 		const float pitch = pitchDegrees * kDegToRad;
 		PlaceCamera(eye, eye + ViewForward(yaw, pitch) * 100.0f, yaw, pitch);
+		// Views are given from the center; scenery positions are usually known from the datum (DSF dumps, apt.dat)
+		SEDX_CORE_INFO_TAG(LOG_TAG, "Viewing from {:.1f}, {:.1f}, {:.1f} m off the center, which is {:.1f}, {:.1f} m from the datum (local x east, z south)",
+			x, y, z, center.x, center.z);
 	}
 
 	bool SceneAirports::LookFromGeo(const double latitude, const double longitude, const float heightMeters, const float headingTrueDegrees, const float pitchDegrees)

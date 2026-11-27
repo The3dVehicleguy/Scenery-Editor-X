@@ -34,6 +34,7 @@
 #include <ctime>
 #include <portable-file-dialogs.h>
 #include <Editor/core/editor_airports.h>
+#include <Editor/core/project_hub.h>
 #include <Editor/core/editor_scene.h>
 #include <Editor/core/editor_theme.h>
 #include <Editor/core/editor_ui.h>
@@ -109,11 +110,6 @@ namespace SceneryEditorX
 				ImGui::ProgressBar(progress, ImVec2(160.0f * ImGui::GetStyle().FontScaleDpi, 0.0f));
 			else
 				ImGui::TextDisabled("%s", FormatBytes(request.GetBytesReceived()).c_str());
-		}
-
-		bool Contains(const std::string &haystack, const std::string &needle)
-		{
-			return needle.empty() || ToLower(haystack).find(needle) != std::string::npos;
 		}
 	}
 
@@ -390,50 +386,10 @@ namespace SceneryEditorX
 			return;
 
 		// Every word must match the code or the name; exact code matches come first.
-		std::vector<std::string> words;
-		{
-			std::vector<std::string_view> tokens;
-			Tokenize(m_GatewayFilter.InputBuf, tokens);
-			for (const std::string_view token : tokens)
-				words.push_back(ToLower(token));
-		}
-
-		std::vector<std::pair<int, uint32_t>> hits;
-		for (uint32_t i = 0; i < list->size(); ++i)
-		{
-			const GatewayAirport &airport = (*list)[i];
-			if (m_GatewayOnlyWithScenery && !airport.HasScenery())
-				continue;
-			if (m_GatewayOnly3D && airport.sceneryType < 2)
-				continue;
-			int rank = 2;
-			bool matches = true;
-			const std::string code = ToLower(airport.code);
-			for (const std::string &word : words)
-			{
-				if (code == word)
-					rank = std::min(rank, 0);
-				else if (code.starts_with(word))
-					rank = std::min(rank, 1);
-				else if (!Contains(airport.name, word))
-				{
-					matches = false;
-					break;
-				}
-			}
-			if (matches)
-				hits.emplace_back(words.empty() ? 2 : rank, i);
-			if (hits.size() > 20000)
-				break;
-		}
-		std::ranges::stable_sort(hits, [list](const auto &a, const auto &b)
-		{
-			if (a.first != b.first)
-				return a.first < b.first;
-			return (*list)[a.second].code < (*list)[b.second].code;
-		});
-		for (size_t i = 0; i < hits.size() && i < 1000; ++i)
-			m_GatewayResults.push_back(hits[i].second);
+		GatewaySearchOptions options;
+		options.onlyWithScenery = m_GatewayOnlyWithScenery;
+		options.only3D = m_GatewayOnly3D;
+		m_GatewayResults = SearchGatewayAirports(*list, m_GatewayFilter.InputBuf, options);
 	}
 
 	void AirportPanel::SelectGatewayAirport(const std::string &code)
@@ -606,6 +562,13 @@ namespace SceneryEditorX
 			ImGui::OpenPopup(INSTALL_POPUP);
 		}
 		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+		ImGui::BeginDisabled(details.scenery.empty());
+		if (ImGui::Button(EditorUI::IconLabel(SEDX_ICON_CODE_FORK, "Clone as Project...").c_str()))
+			ProjectHub::OpenGateway(details.airport.code, m_SelectedScenery);
+		ImGui::EndDisabled();
+		EditorUI::ItemTooltip("Clone the selected (or recommended) submission into a project folder of your own, outside Custom Scenery, and edit it there");
 
 		if (pending && pending->request)
 		{

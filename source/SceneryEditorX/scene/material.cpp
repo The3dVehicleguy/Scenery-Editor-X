@@ -475,6 +475,11 @@ namespace SceneryEditorX
 
 	bool MaterialAsset::IsAlphaTested() const
 	{
+		// Terrain is never cut out: an X-Plane .ter base texture's alpha keys its decals (xp_terrain.slang), so taking it
+		// for coverage made the depth passes drop the ground within 700 m of the camera (issue #96)
+		if (GetProperty(MaterialProperty::Terrain) > 0.0f)
+			return false;
+
 		bool albedoMask = false;
 		if (ImageResource* texture = GetTexture(MaterialTextureType::Color))
 		{

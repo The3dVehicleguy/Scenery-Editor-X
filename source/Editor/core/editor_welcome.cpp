@@ -396,6 +396,7 @@ namespace SceneryEditorX::EditorWelcome
 						row("Quad menu", "Right-click");
 						row("Hotbox", "Hold Space");
 						row("Undo / redo", "Ctrl+Z  /  Ctrl+Y");
+						row("Project Hub (recent, new, clone from the Gateway)", "Ctrl+Shift+O");
 						row("New / open / save project", "Ctrl+N  /  Ctrl+O  /  Ctrl+S");
 						row("Export scenery pack", "Ctrl+E");
 						ImGui::EndTable();
@@ -458,6 +459,11 @@ namespace SceneryEditorX::EditorWelcome
 	void OpenWelcome()
 	{
 		S().showWelcome = true;
+	}
+
+	bool IsShowing()
+	{
+		return S().showWelcome || ImGui::IsPopupOpen(WELCOME_MODAL);	// Asked at the root level, where the welcome opens
 	}
 }
 

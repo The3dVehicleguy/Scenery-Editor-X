@@ -220,3 +220,5 @@ docs/manual/site/
 docs/manual/**/__pycache__/
 # Python bytecode (tools/i18n and other scripts)
 __pycache__/
+# Repowise index (local; rebuild with repowise init)
+.repowise/

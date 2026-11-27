@@ -922,3 +922,44 @@ TEST_CASE("Gateway helpers: base64, URLs and package names", "[xplane][gateway]"
 	CHECK(MakeGatewayPackageName("XABC", "") == "XABC");
 	CHECK(MakeGatewayPackageName("", "...") == "Gateway Airport");
 }
+
+TEST_CASE("Gateway airport search ranks codes before names", "[xplane][gateway]")
+{
+	const auto airport = [](const char *code, const char *name, const int approved, const int type)
+	{
+		GatewayAirport out;
+		out.code = code;
+		out.name = name;
+		out.approvedSceneryCount = approved;
+		out.sceneryType = type;
+		return out;
+	};
+	const std::vector<GatewayAirport> airports = {
+		airport("KSEAX", "Seax Strip", 1, 1),				// 0: starts with "ksea"
+		airport("KSEA", "Seattle Tacoma Intl", 3, 2),		// 1: the code itself
+		airport("KBFI", "Boeing Field King Co Intl", 2, 2),	// 2: no code match, "intl" in the name
+		airport("S50", "Auburn Muni", 0, 0),				// 3: no scenery
+		airport("KPAE", "Snohomish Co (Paine Fld)", 1, 1),	// 4
+		airport("0S9", "Jefferson Co Intl", 1, 2) };		// 5
+
+	using Results = std::vector<uint32_t>;
+	CHECK(SearchGatewayAirports(airports, "ksea") == Results{ 1, 0 });		// Exact code, then codes starting with it
+	CHECK(SearchGatewayAirports(airports, "  KSEA, ") == Results{ 1, 0 });	// Case, blanks and commas don't matter
+	CHECK(SearchGatewayAirports(airports, "intl") == Results{ 5, 2, 1 });	// Names: in code order
+	CHECK(SearchGatewayAirports(airports, "king intl") == Results{ 2 });		// Every word must match
+	CHECK(SearchGatewayAirports(airports, "paine") == Results{ 4 });
+	CHECK(SearchGatewayAirports(airports, "zzzz").empty());
+
+	// Without a query: everything with scenery, in code order; the options narrow it
+	CHECK(SearchGatewayAirports(airports, "") == Results{ 5, 2, 4, 1, 0 });
+	GatewaySearchOptions options;
+	options.onlyWithScenery = false;
+	CHECK(SearchGatewayAirports(airports, "", options).size() == airports.size());
+	CHECK(SearchGatewayAirports(airports, "auburn", options) == Results{ 3 });
+	options.onlyWithScenery = true;
+	options.only3D = true;
+	CHECK(SearchGatewayAirports(airports, "", options) == Results{ 5, 2, 1 });
+	options.only3D = false;
+	options.maxResults = 2;
+	CHECK(SearchGatewayAirports(airports, "", options) == Results{ 5, 2 });
+}

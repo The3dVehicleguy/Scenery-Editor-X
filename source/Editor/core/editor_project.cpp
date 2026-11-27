@@ -36,6 +36,7 @@
 #include "editor_selection.h"
 #include "editor_ui.h"
 #include "project_dialogs.h"
+#include "project_hub.h"
 #include <chrono>
 #include <cmath>
 #include <ctime>
@@ -348,6 +349,7 @@ namespace SceneryEditorX::EditorProjects
 			options.virtualPath = item.resource;
 			options.name = item.name.empty() ? ToUtf8(file.filename()) : item.name;
 			options.frameCamera = false;
+			options.onTerrain = OnTerrain();	// Its draped geometry drapes over the terrain only in the terrain's frame
 
 			std::string error;
 			const uint64_t root = XPlane::SceneObjects::Place(file, options, &error);
@@ -1002,6 +1004,7 @@ namespace SceneryEditorX::EditorProjects
 			}
 		}
 		ProjectDialogs::Init();
+		ProjectHub::Init(preferences);
 	}
 
 	void Shutdown()
@@ -1024,6 +1027,7 @@ namespace SceneryEditorX::EditorProjects
 			else
 				CloseNow(nullptr);
 		}
+		ProjectHub::Shutdown();
 		EditorAirports::SetProjectSaveHandler(nullptr);
 		state.document.SetCache(nullptr);
 		state.cache.reset();
@@ -1035,6 +1039,7 @@ namespace SceneryEditorX::EditorProjects
 		State &state = GetState();
 		const double now = ImGui::GetTime();
 		ProjectDialogs::Tick(context);
+		ProjectHub::Tick(context);
 
 		// Project asked for on the command line, once the library index can resolve its objects
 		if (!state.startupDone && !state.startupProject.empty() && LibraryReady())
@@ -1076,6 +1081,8 @@ namespace SceneryEditorX::EditorProjects
 						continue;
 					transform->translation.y = HeightOf(*item, transform->translation.x, transform->translation.z);
 					GpuScene::MarkTransformDirty(handle);
+					// Its draped geometry follows: over the terrain when it is in the project's frame, else flat
+					XPlane::SceneObjects::SetOnTerrain(root, OnTerrain());
 				}
 			}
 
@@ -1192,6 +1199,26 @@ namespace SceneryEditorX::EditorProjects
 		State &state = GetState();
 		state.startupProject = path;
 		state.startupDone = false;
+	}
+
+	bool RequestOpen(const fs::path &path, EditorContext *context)
+	{
+		State &state = GetState();
+		if (!LibraryReady() && !state.document.IsOpen())
+		{
+			EDITOR_INFO_TAG(LOG_TAG, "Opening {} once the X-Plane library is indexed", ToUtf8(path));
+			OpenWhenReady(path);
+			return true;
+		}
+		if (Open(path, context))
+			return true;
+		return state.pending == Pending::Open;	// Waiting for the unsaved-changes answer
+	}
+
+	fs::path GetWaitingProject()
+	{
+		const State &state = GetState();
+		return state.startupDone ? fs::path() : state.startupProject;
 	}
 
 	bool Save()
@@ -1741,6 +1768,13 @@ namespace SceneryEditorX::EditorProjects
 		State &state = GetState();
 		const bool open = state.document.IsOpen();
 
+		if (ImGui::MenuItem(EditorUI::IconLabel(SEDX_ICON_TH_LARGE, "Project Hub...").c_str(), "Ctrl+Shift+O"))
+			ProjectHub::Open();
+		EditorUI::ItemTooltip("Recent projects, a new airport project, or a Scenery Gateway airport cloned into a folder of your own");
+		if (ImGui::MenuItem(EditorUI::IconLabel(SEDX_ICON_CLOUD_DOWNLOAD, "Clone Gateway Airport...").c_str()))
+			ProjectHub::Open(ProjectHub::Page::Gateway);
+		EditorUI::ItemTooltip("Download an airport's Scenery Gateway submission into a project folder outside Custom Scenery and open it");
+		ImGui::Separator();
 		if (ImGui::MenuItem(EditorUI::IconLabel(SEDX_ICON_FILE, "New Project...").c_str(), "Ctrl+N"))
 			NewProject(context);
 		EditorUI::ItemTooltip("A new scenery pack (anything, anywhere), an airport or an asset library, created in Custom Scenery or a folder you choose");
@@ -1813,6 +1847,7 @@ namespace SceneryEditorX::EditorProjects
 	void DrawModals(EditorContext *context)
 	{
 		ProjectDialogs::Draw(context);
+		ProjectHub::Draw(context);
 		State &state = GetState();
 		if (state.openUnsaved)
 		{

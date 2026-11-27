@@ -134,6 +134,13 @@ namespace SceneryEditorX::XPlane
 		 */
 		constexpr uint64_t MAX_DECODED_BYTES = 512ull << 20;
 
+		/*
+		 * Largest static ATTR_draped batch kept on the CPU for placements to drape over the terrain (ObjectBatch::
+		 * drapeIndices), in indices. Painted markings are a few quads; a batch beyond this (some 21,000 triangles) would
+		 * cost every placement a large copy to cut, and its CPU copy would stay for good, so it draws flat as before.
+		 */
+		constexpr size_t MAX_DRAPED_BATCH_INDICES = 65536;
+
 		/* @brief Upload steps of a decoded load: the textures one by one, then geometry and materials. */
 		enum UploadStep : uint32_t
 		{
@@ -975,6 +982,12 @@ namespace SceneryEditorX::XPlane
 			ObjectBatch out = std::move(batch.batch);
 			out.material = GetOrCreateMaterial(batch.state);
 			m_Mesh->AddGeometry(batch.vertices, batch.indices, false, &out.subMesh);
+			// Placements drape static ATTR_draped geometry over the terrain themselves (a few quads: parking bays, stop bars)
+			if (out.draped && out.node < 0 && batch.indices.size() <= MAX_DRAPED_BATCH_INDICES)
+			{
+				out.drapeVertices = std::move(batch.vertices);
+				out.drapeIndices = std::move(batch.indices);
+			}
 			m_Batches.push_back(std::move(out));
 		}
 		job.batches.clear();

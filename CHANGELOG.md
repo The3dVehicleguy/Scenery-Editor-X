@@ -9,6 +9,31 @@ versions.
 
 ### Added
 
+- **Project Hub** (0.2.113.614). The editor starts on a window for choosing what to work on (after the first-launch
+  keymap question; **File › Project Hub…** or <kbd>Ctrl+Shift+O</kbd> brings it back, and **Show at startup** turns
+  the startup part off): **Recent Projects** (searchable, opened with a double-click, missing files marked and removable,
+  **Show in Folder**), **New Project** (the New Project form, set to an airport), **Open Project…**, and **Clone from
+  Gateway**, which searches the Scenery Gateway's airports, lists an airport's submissions with the recommended one
+  picked, and clones one into a project folder of its own, outside X-Plane's `Custom Scenery` by default
+  (`Documents/Scenery Editor X/Projects`): the submission's files as downloaded plus an `.edX` project holding its
+  airport and its DSF placements as editable items, with the submission's scenery id recorded as the next upload's
+  parent. A clone that fails partway removes what it wrote, so the same name can be tried again (0.2.114.615); once
+  downloaded, a clone is unzipped, imported and written on a job thread, so a large airport doesn't stall the editor,
+  and it goes into the folder the hub showed (0.2.115.616). A pack holding several airports, none of them the
+  submission's, isn't cloned (one airport under another code is, with a warning); folder entries are skipped, and of
+  two names differing only in case the first is copied, with a warning (0.2.116.617); names lose line ends around
+  them as well as spaces (0.2.117.618); a damaged tile's placements that name no listed definition are reported,
+  and a submission file named like the project file isn't copied over it (0.2.118.619).
+  Quitting while a clone is written stops it at its next tile or file instead of waiting for it; a clone that fails or
+  is stopped removes only the files and folders it made, and a submission with a file named like another's folder is
+  refused before anything is written (0.2.119.620).
+  The AIRPORTS panel's Gateway tab gains **Clone as Project…**. Command line: `--project-hub
+  [recent|new|gateway]`, `--gateway-clone "<scenery id>[;folder]"`. For developers: `ProjectFile::ImportDsfItems`
+  (a DSF's placements as project items, the inverse of `BuildProjectDsf`, polygons top of the hierarchy first),
+  `XPlane::AppendDsf` (a pack's tiles read as one DSF), `project/gateway_clone.*` (standard library only) and
+  `XPlane::SearchGatewayAirports` (the Gateway search the AIRPORTS panel and the hub share), covered by
+  `DsfImportTests.cpp` and `GatewayCloneTests.cpp` in `ProjectFormatTests` and a search case in `AirportTests.cpp`.
+
 - **Interface languages** (0.2.90.591). The editor can show its menus, panels and messages in other languages:
   **Edit › Preferences › Interface** (or **Help › Language...**) switches at once, without a restart, and
   `ui.language = "system"` in `settings.cfg` (the new default) follows the operating system's languages; `--language
@@ -67,6 +92,40 @@ versions.
 
 ### Fixed
 
+- Where runways cross, the more important runway's markings now go on straight through the intersection and the other
+  runway's stop at its edges, like real paint (issue #99; ICAO Annex 14 5.2.1.3). They used to blend: at KGON, 15/33's
+  centerline and edge stripes ran across 5/23's touchdown markings. Every runway's markings were drawn over every
+  runway's surface, because all runway surfaces sat at one height and all markings 8 mm above them. Now the other
+  runway's markings are cut away inside the one on top (`CutOutConvex`), and the top runway's surface sits a fraction
+  of a millimetre higher so its pavement shows at the crossing. Which one is on top (`GetRunwayRanks`): paved over
+  unpaved, then precision approach over non-precision over visual over none (by the more important end's marking code,
+  FAA, UK and EASA alike), then the earlier row in apt.dat, the way apt.dat layers pavement. X-Plane doesn't document
+  how it layers crossing runways. Editing one runway now rebuilds all of an airport's runways, since they depend on
+  each other. (0.2.106.607; markings near another runway but clear of it are left whole instead of being split into
+  more triangles, 0.2.108.609; each rank's lift at least 4 µm above the one below, so
+  neighbouring runways never share a drape order whatever their number, 0.2.109.610; the cut skips runways that don't
+  meet and the runway height's headroom is checked at compile time, 0.2.110.611 and 0.2.111.612; a cut outline with a
+  repeated corner cuts too, 0.2.112.613)
+- The airport boundary (the orange band the editor draws along an apt.dat `130` boundary) is no longer covered by the
+  terrain over parts of its length. It was drawn at the terrain's own height, so whether the terrain or the band won the
+  depth test came down to rounding (at KPVD the stretch beside the service road south-west of the tower was hidden from
+  far away, and up close too once the terrain was back in the depth buffer within 700 m). It now sits 1 mm above the
+  terrain, still the lowest of the airport's drapes (`HEIGHT_BOUNDARY`). (0.2.101.602)
+- Painted markings placed as X-Plane objects (`ATTR_draped` geometry: parking bays, stop bars, road markings from DSF
+  objects and `.agp` art) now follow the terrain like in X-Plane instead of sinking into sloping ground. They were drawn
+  rigid and flat at the terrain's height under the object's origin, so the far end of a long one went under the ground
+  where it rose (KPVD's 34 m parking bays: more than 8.5 cm within 10 m at 10 of the 259 placed). Each placement now
+  cuts its static draped batches along the terrain's triangles (`TerrainSurface::DrapePlaced`) and draws its own copy;
+  a moved object is draped again once it stands still for a few frames, and stays rigid while it is dragged. Animated
+  draped geometry, a batch that reaches off the terrain, and one larger than 65,536 indices (some 21,000 triangles,
+  0.2.104.605) still draw flat. (0.2.102.603; the terrain's normal kept on objects scaled unevenly, and moved objects
+  checked on a steady schedule, 0.2.103.604; that schedule unit-tested, `xp_drape_schedule.h`, 0.2.105.606)
+- The ground no longer turns grey within 700 m of the camera: zooming in on an airport showed a flat grey disc where
+  the terrain should be (grass, fields, towns), moving with the camera, with only pavements and objects drawn on it. The
+  depth passes took the alpha of an X-Plane `.ter` base texture for coverage and cut the terrain out within 700 m (the
+  distance up to which cut-out texels are tested), so those pixels were lit as sky. That alpha keys the terrain's detail
+  decals; terrain is no longer treated as alpha-tested (`MaterialAsset::IsAlphaTested`, `depth_prepass.slang`,
+  `depth_light.slang`) and now also casts its full shadow. (#96, 0.2.100.601)
 - The viewport camera (`MainCamera`) is no longer listed in the OUTLINER and can't be deleted: deleting it there, or
   with Del while it was selected, left a camera nothing could move until the editor restarted. `EditorScene::Destroy`
   refuses it and returns whether it destroyed anything. (#80, 0.2.84.585; Del with only the camera selected deletes

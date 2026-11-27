@@ -37,7 +37,7 @@ The dependency-light, cross-platform Catch2 unit suites that only need `source/`
   a few seconds for every case.
 - **`XPlaneFormatTests`** (`source/Tests/xplane_tests`) — OBJ8 parsing/animation evaluation, the
   `library.txt` / `scenery_packs.ini` parsers + library index, the `lights.txt` light catalog, and the
-  apt.dat 12.00 parser/writer, airport geometry, airport index, Scenery Gateway JSON records, the DSF
+  apt.dat 12.00 parser/writer, airport geometry, airport index, Scenery Gateway JSON records and airport search, the DSF
   reader and writer (`DsfWriterTests.cpp`: 16-bit pool quantization, MD5 footer, airport filters, per-tile
   split, road networks as 32-bit pools of junction-to-junction segments), the .pol/.lin/.str/.for/.fac/.agp
   and .net (road types, virtual types, draped strips) asset parsers and the overlay geometry builder (roads
@@ -61,7 +61,9 @@ The dependency-light, cross-platform Catch2 unit suites that only need `source/`
   into it, overlays read only from base meshes, sim/exclude_* zones as boxes and X-Plane 12 polygons), `.ter` terrain types
   (`xp_terrain.*`; every default `.ter` parses with its textures, tag `[library-sweep]`), library resolution by REGION bitmap
   and season (`xp_library.*` ResolveProvider), the terrain meshes in the local frame and the surface drapes are cut onto
-  (`xp_terrain_mesh.*`: heights, rays, exact draping across a crease, clipped at the terrain's edge; water meshes cut into
+  (`xp_terrain_mesh.*`: heights, rays, exact draping across a crease, clipped at the terrain's edge, an object's
+  `ATTR_draped` geometry draped through its placement and brought back into object space, normals under a non-uniform
+  scale; `xp_drape_schedule.h`: when a placement is draped again, once a move has settled; water meshes cut into
   64 m cells without T-junctions for tessellation, `CutTerrainAlongGrid`, and the floor's depth from X-Plane 12's depth
   ratio and the bathymetry, `WaterFloorDepth`, tag `[water]`); with an X-Plane 12
   install listed it reads KSEA's 7-zip Global Scenery tile and its scenery within a mile and the test airports' season
@@ -85,7 +87,12 @@ The dependency-light, cross-platform Catch2 unit suites that only need `source/`
   `earth.wed.xml` import/export (`docs/XCoder/earth.wed.xml`), atomic writes, the project cache (snapshots,
   recovery, backups), `ProjectDocument` open/edit/save/close, the project -> DSF conversion the editor draws
   through the overlay builder, road networks (road node and road items through .edX / .sex / WED_RoadNode +
-  WED_RoadEdge, junctions kept on their nodes, DSF segments with shared junction ids), and the viewport node
+  WED_RoadEdge, junctions kept on their nodes, DSF segments with shared junction ids), a DSF's placements brought back
+  as items (`DsfImportTests.cpp`: `ImportDsfItems` in `project/project_dsf.*`, every kind and layout round trips through
+  BuildProjectDsf, written and read tiles within the pool quantization), Scenery Gateway submissions cloned into a project
+  folder (`GatewayCloneTests.cpp`: `project/gateway_clone.*` the airport and its DSF placements as items, the folder's
+  files, names / folders / hostile archive names checked before writing, several tiles merged with `XPlane::AppendDsf`),
+  and the viewport node
   editor's bezier core (`SplineEditTests.cpp`:
   `project/spline_edit.*` round trips apt.dat chains and project rings bit for bit, de Casteljau inserts, handles,
   deletes, smoothing, transforms, node types (corner / smooth / symmetric / free), bending a segment through a point,
@@ -258,6 +265,8 @@ g++ -std=c++20 -O2 -pthread $INCS source/Tests/project_tests/ProjectFormatTests.
     source/SceneryEditorX/project/xml_document.cpp source/SceneryEditorX/project/project_io.cpp \
     source/SceneryEditorX/project/project_cache.cpp source/SceneryEditorX/project/project_document.cpp \
     source/SceneryEditorX/project/project_dsf.cpp source/SceneryEditorX/xplane/xp_apt.cpp \
+    source/Tests/project_tests/DsfImportTests.cpp source/Tests/project_tests/GatewayCloneTests.cpp \
+    source/SceneryEditorX/project/gateway_clone.cpp \
     source/SceneryEditorX/xplane/xp_library.cpp source/SceneryEditorX/xplane/xp_apt_geometry.cpp \
     source/SceneryEditorX/xplane/xp_dsf.cpp source/SceneryEditorX/xplane/xp_7z.cpp source/SceneryEditorX/xplane/xp_assets.cpp \
     source/SceneryEditorX/xplane/xp_autogen.cpp source/SceneryEditorX/xplane/xp_facade.cpp source/SceneryEditorX/xplane/xp_overlay.cpp $LIBS \

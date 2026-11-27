@@ -75,7 +75,7 @@ void main_frag(gbuffer_vertex vertex)
     // A forest's billboards or 3D trees cast as the camera sees them (dithered by the shadow map's pixel instead)
     if (xp_lod_switch_discard(material, vertex.position_previous.xyz, vertex.position.xy))
         discard;
-    if (!material.has_texture_albedo())
+    if (!material.has_texture_albedo() || material.is_terrain())	// terrain's albedo alpha keys its decals: no coverage
         return;
 
     const float cutoff = material.alpha_cutoff > 0.0f ? material.alpha_cutoff : 0.5f;

@@ -43,7 +43,9 @@
 #include <SceneryEditorX/filesystem/vfs.h>
 #include <SceneryEditorX/logging/logging.hpp>
 #include <SceneryEditorX/project/scenery_pack.h>
+#include <SceneryEditorX/i18n/tr.h>
 #include <SceneryEditorX/renderer/font/font_awesome.h>
+#include <SceneryEditorX/renderer/ui/i18n_imgui.h>
 #include <SceneryEditorX/renderer/ui/source/imgui/misc/cpp/imgui_stdlib.h>
 #include <SceneryEditorX/xplane/xp_airport_document.h>
 #include <SceneryEditorX/xplane/xp_airport_scene.h>
@@ -396,16 +398,17 @@ namespace SceneryEditorX::ProjectDialogs
 			EditorUI::EndPropertyGrid();
 		}
 
-		void DrawNewProject(EditorContext *context)
+		/**
+		 * @brief The New Project form's fields and buttons in the current window. Embedded (the Project Hub's New page) it
+		 * has no Cancel button and no Escape key, and opening the new project asks about the open one's unsaved changes
+		 * (the hub didn't ask before it opened); the modal's caller asked already.
+		 */
+		FormResult DrawNewForm(EditorContext *context, const bool embedded)
 		{
 			State &s = S();
 			NewForm &form = s.form;
 			const float dpi = ImGui::GetStyle().FontScaleDpi;
-
-			ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-			ImGui::SetNextWindowSizeConstraints(ImVec2(560.0f * dpi, 0.0f), ImVec2(720.0f * dpi, FLT_MAX));
-			if (!ImGui::BeginPopupModal(NEW_MODAL, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
-				return;
+			FormResult result = FormResult::None;
 
 			const float labelWidth = 170.0f;
 			const auto touched = [&form](const std::string &text) { return form.attempted || !text.empty(); };
@@ -611,9 +614,12 @@ namespace SceneryEditorX::ProjectDialogs
 					if (!form.addAirport)
 					{
 						VFS::Get().Write(LOCATION_FILE, form.location);
-						EditorProjects::Open(projectFile, context, true);
+						if (embedded)
+							EditorProjects::RequestOpen(projectFile, context);	// Asks about the open project's unsaved changes
+						else
+							EditorProjects::Open(projectFile, context, true);	// The caller asked already
 					}
-					ImGui::CloseCurrentPopup();
+					result = FormResult::Created;
 					const NewForm previous = form;
 					form = NewForm();
 					form.location = previous.location;
@@ -621,17 +627,33 @@ namespace SceneryEditorX::ProjectDialogs
 					form.kind = previous.kind;
 				}
 			}
-			ImGui::SameLine();
-			if (ImGui::Button("Cancel", ImVec2(buttonWidth, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+			if (!embedded)
 			{
-				form.addAirport = false;
-				ImGui::CloseCurrentPopup();
+				ImGui::SameLine();
+				if (ImGui::Button(TrL("Cancel"), ImVec2(buttonWidth, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+				{
+					form.addAirport = false;
+					result = FormResult::Cancelled;
+				}
 			}
 			if (form.attempted && !problems.empty())
 			{
 				ImGui::SameLine();
-				ImGui::TextColored(Color(EditorTheme::Palette::Warning), "%s  %zu %s to fix", SEDX_ICON_EXCLAMATION_TRIANGLE, problems.size(), problems.size() == 1 ? "field" : "fields");
+				ImGui::TextColored(Color(EditorTheme::Palette::Warning), "%s  %s", SEDX_ICON_EXCLAMATION_TRIANGLE,
+					TrNF("{} field to fix", "{} fields to fix", static_cast<std::int64_t>(problems.size()), problems.size()).c_str());
 			}
+			return result;
+		}
+
+		void DrawNewProject(EditorContext *context)
+		{
+			const float dpi = ImGui::GetStyle().FontScaleDpi;
+			ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+			ImGui::SetNextWindowSizeConstraints(ImVec2(560.0f * dpi, 0.0f), ImVec2(720.0f * dpi, FLT_MAX));
+			if (!ImGui::BeginPopupModal(NEW_MODAL, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+				return;
+			if (DrawNewForm(context, false) != FormResult::None)
+				ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
 		}
 
@@ -909,6 +931,23 @@ namespace SceneryEditorX::ProjectDialogs
 		s.form.attempted = false;
 		s.form.error.clear();
 		s.openNew = true;
+	}
+
+	void PrepareNewProjectForm(const bool airport)
+	{
+		State &s = S();
+		const NewForm previous = s.form;
+		s.form = NewForm();
+		s.form.location = previous.location.empty() ? DefaultLocation() : previous.location;
+		s.form.author = previous.author;
+		s.form.kind = airport ? FORM_AIRPORT : (previous.kind == FORM_AIRPORT ? FORM_SCENERY : previous.kind);
+		s.form.hasReference = s.form.kind != FORM_LIBRARY;
+	}
+
+	FormResult DrawNewProjectForm(EditorContext *context)
+	{
+		S().form.addAirport = false;
+		return DrawNewForm(context, true);
 	}
 
 	void OpenAddAirport()

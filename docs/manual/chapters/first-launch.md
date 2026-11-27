@@ -10,6 +10,9 @@ When you start the editor it:
 2. **Sets up its folders.** Settings go in `%APPDATA%\SceneryEditorX`, caches and recovery data in `%LOCALAPPDATA%\SceneryEditorX`. If an older test build kept files somewhere else, they are moved once, never overwriting anything. [Where Scenery Editor X keeps files](file-locations.md) has the full list.
 3. **Finds X-Plane** and starts indexing its libraries and airports in the background.
 4. **Opens the workspace** with the last panel layout you used.
+5. **Shows the [Project Hub](projects.md#the-project-hub)**, once the keymap question below is answered: your recent
+   projects, a new airport project, or an airport cloned from the Scenery Gateway. Untick **Show at startup** in it to
+   start on an empty workspace instead.
 
 The first start takes longer than the ones after it: the editor compiles its shaders and builds its airport index, and keeps both in its cache for next time.
 

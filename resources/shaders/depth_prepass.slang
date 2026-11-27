@@ -74,8 +74,10 @@ void main_frag(depth_vertex vertex)
     pass_load_draw_data_from_vertex(vertex.material_index);
 
     // distance based alpha threshold, unless the material sets its own cutoff (texels below it are drawn by
-    // the forward transparent pass, which must split the surface at the same alpha at every distance)
-    const bool has_albedo       = GetMaterial().has_texture_albedo(); // also right for GPU-scene draws (no per-draw constants)
+    // the forward transparent pass, which must split the surface at the same alpha at every distance). Terrain is
+    // never cut out (MaterialAsset::IsAlphaTested): its albedo alpha keys the decals (xp_terrain.slang), and cutting
+    // it left a 700 m hole of sky around the camera (issue #96).
+    const bool has_albedo       = GetMaterial().has_texture_albedo() && !GetMaterial().is_terrain(); // also right for GPU-scene draws (no per-draw constants)
     const float2 screen_uv      = vertex.position.xy / (get_resolution_render() * get_resolution_scale());
     const float3 position_world = get_position(vertex.position.z, screen_uv);
     if (xp_lod_switch_discard(GetMaterial(), position_world, vertex.position.xy))	// a forest's billboards or 3D trees
