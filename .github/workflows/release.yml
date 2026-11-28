@@ -135,6 +135,21 @@ jobs:
           path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
           key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}
 
+      # The installer itself isn't signed, but every file the setup ships from the SDK is (the Slang DLLs and the
+      # Vulkan Runtime installer): checked on every run, a cached SDK included, so nothing unsigned is packaged
+      - name: Check the Vulkan SDK's signatures
+        run: |
+          $root = "C:\VulkanSDK\$env:VULKAN_SDK_VERSION"
+          $files = @(Get-ChildItem "$root\Bin" -Filter 'slang*.dll') + @(Get-Item "$root\Helpers\VulkanRT.exe")
+          if ($files.Count -lt 4) { throw "The Vulkan SDK at $root is missing the Slang DLLs or Helpers\VulkanRT.exe." }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '^CN="?LunarG, Inc\.') {
+              throw "$($file.Name) isn't validly signed by LunarG ($($signature.Status); $($signature.SignerCertificate.Subject))."
+            }
+          }
+          Write-Host "$($files.Count) SDK files signed by LunarG, Inc."
+
       - name: Use the Vulkan SDK
         run: |
           $root = "C:\VulkanSDK\$env:VULKAN_SDK_VERSION"

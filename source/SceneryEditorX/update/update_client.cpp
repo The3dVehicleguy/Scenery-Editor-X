@@ -621,8 +621,12 @@ namespace SceneryEditorX::Update
 				const ReleaseAsset *listing = FindAsset(release, name);
 				if (!listing)
 					continue;
+				// Each listing that can't be used says why in the log before the next one is tried
 				if (!IsTrustedDownload(listing->downloadUrl, testServer))
+				{
+					SEDX_CORE_WARN_TAG(LOG_TAG, "{} isn't a release file of {}: not used for the setup's SHA-256", listing->downloadUrl, REPOSITORY);
 					continue;
+				}
 				std::string body;
 				HttpResult result;
 				if (!GetText(listing->downloadUrl, false, MAX_CHECKSUM_BYTES, testServer, body, result))
@@ -632,10 +636,13 @@ namespace SceneryEditorX::Update
 						cancelled = true;
 						return {};
 					}
+					SEDX_CORE_WARN_TAG(LOG_TAG, "Could not read {} for the setup's SHA-256: {}", name,
+						result.transferred ? DescribeStatus(result.status, false) : result.error);
 					continue;
 				}
 				if (std::string hash = FindChecksum(body, file.name); !hash.empty())
 					return hash;
+				SEDX_CORE_WARN_TAG(LOG_TAG, "{} doesn't list {}", name, file.name);
 			}
 			error = "the release publishes no SHA-256 for " + file.name + ", so the download can't be checked";
 			return {};
