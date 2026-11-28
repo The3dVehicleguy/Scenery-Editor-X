@@ -68,10 +68,91 @@ namespace SceneryEditorX::EditorVisibility
 		constexpr const char *LOG_TAG = "Visibility";
 		constexpr uint32_t MAX_DEPTH = 64;	// Guards the parent walks against relationship cycles
 
+		/* @brief What a target names (what Target::SameAs compares) as a hash key. */
+		std::string TargetId(const Target &target)
+		{
+			switch (target.type)
+			{
+				case TargetType::Entity:			return "e" + std::to_string(target.entity);
+				case TargetType::AirportElement:	return "r" + std::to_string(static_cast<int>(target.kind)) + ":" + std::to_string(target.index);
+				case TargetType::ProjectItem:		return "i" + target.itemId;
+			}
+			return {};
+		}
+
+		/**
+		 * @brief Targets with an index by what they name: adding, removing and finding one are O(1), so hiding, showing or
+		 * undoing thousands of rows stays linear. The order isn't kept (a removal moves the last one into the gap).
+		 */
+		class TargetSet
+		{
+		public:
+			[[nodiscard]] bool Contains(const Target &target) const { return m_Index.contains(TargetId(target)); }
+
+			/* @brief False when it was there already. */
+			bool Add(const Target &target)
+			{
+				const auto [it, added] = m_Index.try_emplace(TargetId(target), m_Targets.size());
+				if (added)
+					m_Targets.push_back(target);
+				return added;
+			}
+
+			bool Remove(const Target &target)
+			{
+				const auto it = m_Index.find(TargetId(target));
+				if (it == m_Index.end())
+					return false;
+				const size_t at = it->second;
+				m_Index.erase(it);
+				if (at + 1 != m_Targets.size())
+				{
+					m_Targets[at] = std::move(m_Targets.back());
+					m_Index[TargetId(m_Targets[at])] = at;
+				}
+				m_Targets.pop_back();
+				return true;
+			}
+
+			void Set(const Target &target, const bool present)
+			{
+				if (present)
+					Add(target);
+				else
+					Remove(target);
+			}
+
+			/* @brief Removes the targets `remove` returns true for (called once for each). */
+			template<typename Predicate>
+			void EraseIf(Predicate remove)
+			{
+				std::erase_if(m_Targets, remove);
+				m_Index.clear();
+				for (size_t i = 0; i < m_Targets.size(); ++i)
+					m_Index[TargetId(m_Targets[i])] = i;
+			}
+
+			void clear()
+			{
+				m_Targets.clear();
+				m_Index.clear();
+			}
+
+			[[nodiscard]] bool empty() const { return m_Targets.empty(); }
+			[[nodiscard]] size_t size() const { return m_Targets.size(); }
+			[[nodiscard]] std::vector<Target>::const_iterator begin() const { return m_Targets.begin(); }
+			[[nodiscard]] std::vector<Target>::const_iterator end() const { return m_Targets.end(); }
+			[[nodiscard]] const std::vector<Target> &List() const { return m_Targets; }
+
+		private:
+			std::vector<Target> m_Targets;
+			std::unordered_map<std::string, size_t> m_Index;	// TargetId -> position in m_Targets
+		};
+
 		struct State
 		{
-			std::vector<Target> hidden;					// Own hide toggles (normalized)
-			std::vector<Target> locked;					// Own lock toggles of what isn't a project item (items: SceneryItem::locked)
+			TargetSet hidden;							// Own hide toggles (normalized)
+			TargetSet locked;							// Own lock toggles of what isn't a project item (items: SceneryItem::locked)
 			bool isolating = false;
 			std::vector<Target> isolated;				// What the isolation shows
 
@@ -125,24 +206,22 @@ namespace SceneryEditorX::EditorVisibility
 		{
 			s.dirty = true;
 			++s.revision;
+			// Keys of entities no longer hidden or locked go (the cache would grow with every entity ever toggled)
+			std::erase_if(s.entityKeys, [&s](const auto &entry)
+			{
+				const Target target = Target::ForEntity(entry.first);
+				return !s.hidden.Contains(target) && !s.locked.Contains(target);
+			});
 		}
 
-		bool Contains(const std::vector<Target> &targets, const Target &target)
+		bool Contains(const TargetSet &targets, const Target &target)
 		{
-			return std::ranges::any_of(targets, [&target](const Target &known) { return known.SameAs(target); });
+			return targets.Contains(target);
 		}
 
-		void Set(std::vector<Target> &targets, const Target &target, const bool present)
+		void Set(TargetSet &targets, const Target &target, const bool present)
 		{
-			if (present)
-			{
-				if (!Contains(targets, target))
-					targets.push_back(target);
-			}
-			else
-			{
-				std::erase_if(targets, [&target](const Target &known) { return known.SameAs(target); });
-			}
+			targets.Set(target, present);
 		}
 
 		entt::entity ParentOf(const entt::registry &registry, const entt::entity handle)
@@ -466,7 +545,7 @@ namespace SceneryEditorX::EditorVisibility
 				return;
 			KeyIndex index;
 			bool any = false;
-			const auto resolve = [&](std::vector<std::string> &pending, std::vector<Target> &targets, const bool items)
+			const auto resolve = [&](std::vector<std::string> &pending, TargetSet &targets, const bool items)
 			{
 				std::erase_if(pending, [&](const std::string &key)
 				{
@@ -576,14 +655,10 @@ namespace SceneryEditorX::EditorVisibility
 
 		std::vector<Target> SelectedTargets()
 		{
-			std::vector<Target> targets;
+			TargetSet targets;
 			for (const Target &target : EditorSelection::Get())
-			{
-				const Target normalized = Normalize(target);
-				if (!Contains(targets, normalized))
-					targets.push_back(normalized);
-			}
-			return targets;
+				targets.Add(Normalize(target));
+			return targets.List();	// Nothing removed: still in the selection's order
 		}
 
 		/**
@@ -666,9 +741,9 @@ namespace SceneryEditorX::EditorVisibility
 		 * @brief Entity targets whose entity is gone (UUIDs aren't reused) wait as their saved key instead, found again when
 		 * an entity at that path comes back (terrain reloaded, say).
 		 */
-		void ForgetGone(State &s, std::vector<Target> &targets, std::vector<std::string> &pending)
+		void ForgetGone(State &s, TargetSet &targets, std::vector<std::string> &pending)
 		{
-			std::erase_if(targets, [&s, &pending](const Target &target)
+			targets.EraseIf([&s, &pending](const Target &target)
 			{
 				if (target.type != TargetType::Entity || EditorScene::FindHandle(target.entity) != entt::null)
 					return false;
@@ -867,15 +942,16 @@ namespace SceneryEditorX::EditorVisibility
 	void SetHidden(EditorContext *context, const std::vector<Target> &targets, const bool hidden)
 	{
 		State &s = S();
-		std::vector<Target> changed;
+		TargetSet changing;
 		for (const Target &target : targets)
 		{
 			const Target normalized = Normalize(target);
-			if (IsHidden(normalized) != hidden && !Contains(changed, normalized))
-				changed.push_back(normalized);
+			if (IsHidden(normalized) != hidden)
+				changing.Add(normalized);
 		}
-		if (changed.empty())
+		if (changing.empty())
 			return;
+		const std::vector<Target> changed = changing.List();
 
 		KeyIndex index;
 		for (const Target &target : changed)
@@ -893,7 +969,7 @@ namespace SceneryEditorX::EditorVisibility
 			std::vector<Target> deselect;
 			for (const Target &selected : EditorSelection::Get())
 			{
-				if (Contains(changed, Normalize(selected)))
+				if (changing.Contains(Normalize(selected)))
 					deselect.push_back(selected);
 			}
 			if (!deselect.empty())
@@ -930,19 +1006,15 @@ namespace SceneryEditorX::EditorVisibility
 			return;
 		std::unordered_set<uint64_t> others;
 		CollectOthers(selected, others);
-		std::vector<Target> targets;
+		TargetSet targets;
 		for (const uint64_t id : others)
-		{
-			const Target target = ForEntity(id);
-			if (!Contains(targets, target))
-				targets.push_back(target);
-		}
-		SetHidden(context, targets, true);
+			targets.Add(ForEntity(id));
+		SetHidden(context, targets.List(), true);
 	}
 
 	void ShowAll(EditorContext *context)
 	{
-		const std::vector<Target> hidden = S().hidden;
+		const std::vector<Target> hidden = S().hidden.List();
 		SetHidden(context, hidden, false);
 	}
 
@@ -1058,11 +1130,12 @@ namespace SceneryEditorX::EditorVisibility
 		State &s = S();
 		KeyIndex index;
 		std::vector<Target> changed;
+		TargetSet seen;
 		bool items = false;
 		for (const Target &target : targets)
 		{
 			const Target normalized = Normalize(target);
-			if (IsLockedSelf(normalized) == locked || Contains(changed, normalized))
+			if (IsLockedSelf(normalized) == locked || !seen.Add(normalized))
 				continue;
 			if (normalized.type == TargetType::ProjectItem)
 			{
@@ -1127,7 +1200,7 @@ namespace SceneryEditorX::EditorVisibility
 
 	void UnlockAll(EditorContext *context)
 	{
-		std::vector<Target> targets = S().locked;
+		std::vector<Target> targets = S().locked.List();
 		if (const ProjectFile::ProjectDocument *document = EditorProjects::GetDocument())
 		{
 			document->GetProject().ForEachItem([&targets](const ProjectFile::SceneryItem &item, int)
@@ -1238,9 +1311,9 @@ namespace SceneryEditorX::EditorVisibility
 		if (airportId != s.appliedAirport)
 		{
 			KeyIndex index;
-			const auto park = [&s, &index](std::vector<Target> &targets, std::vector<std::string> &pending)
+			const auto park = [&s, &index](TargetSet &targets, std::vector<std::string> &pending)
 			{
-				std::erase_if(targets, [&s, &index, &pending](const Target &target)
+				targets.EraseIf([&s, &index, &pending](const Target &target)
 				{
 					if (target.type != TargetType::AirportElement)
 						return false;

@@ -9,7 +9,7 @@ versions.
 
 ### Added
 
-- **Hide, isolate and lock** (0.2.120.621, issue #104; review follow-ups 0.2.121.622, 0.2.122.623, 0.2.123.624, 0.2.124.625). Each OUTLINER row has an eye and a lock toggle on its left;
+- **Hide, isolate and lock** (0.2.120.621, issue #104; review follow-ups 0.2.121.622, 0.2.122.623, 0.2.123.624, 0.2.124.625, 0.2.125.626). Each OUTLINER row has an eye and a lock toggle on its left;
   a drag down either column sets every row it crosses, as one undo step, and a hidden or locked row covers what is
   below it (shown with a dimmed icon). Hiding is view-only: hidden things aren't drawn, hovered, picked, box-selected
   or framed, and they are still exported. **Hide Selected**, **Hide Unselected** and **Show All** (<kbd>H</kbd> /
