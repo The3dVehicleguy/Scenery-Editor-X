@@ -38,6 +38,8 @@ feature branches ──PR──▶ dev ──PR──▶ release ──tag v0.2.
 4. **Watch the workflow** (`gh run watch`, or the repository's Actions tab, workflow *Release*). It takes about an hour
    when the vcpkg ports have to be built and much less once they're cached:
    - **Release gate** checks the tag (below) and writes the release notes.
+   - **No release for the tag yet** stops the run when the tag already has a release, a draft included (the gate's
+     read-only token can't see drafts), before the long Windows build. The publish job checks again.
    - **Unit tests** run the Catch2 suites on Linux (g++), macOS (Apple clang) and Windows (MSYS2 g++).
    - **Windows installer** builds the Release editor and its NSIS setup, starts the staged editor with
      `--check-vulkan` to prove its files load, and writes the setup's SHA-256.
@@ -105,7 +107,8 @@ it, and every release is a new tag.
 | **Actions › vcpkg packages › Run workflow** | The same for any branch (`ref`, default `dev`) |
 | A pull request that changes the dependencies | Built as a check; its set is kept 7 days and never used by other runs |
 
-Only sets from pushes, the schedule and manual runs are used (they need write access), never a pull request's, so a
+Only sets from pushes, the schedule and manual runs on `dev`, `release` or `master` are used (they need write access;
+a manual run on another branch runs that branch's copy of the workflow), never a pull request's, so a
 pull request can't slip its own binaries into a release. Before a release that changes dependencies, let the push to
 `dev` (or a manual run) finish first; otherwise the release builds the new ports itself. Each release run's summary
 names the run its packages came from. The contract is
@@ -160,4 +163,5 @@ Set once by a repository administrator (the workflow can't change them):
 - **Approval before publishing (optional).** Create an environment named `release` with required reviewers and add
   `environment: release` to the *publish* job: the workflow then waits for an approval before it creates the release.
 - **Actions.** The repository allows only GitHub's own actions and a few listed ones; the release workflow uses only
-  `actions/*`. It needs no secrets: the publish job uses the workflow's own token with `contents: write`.
+  `actions/*`. It needs no secrets: the publish job and the drafts check (which runs nothing from the repository) use the
+  workflow's own token with `contents: write`.

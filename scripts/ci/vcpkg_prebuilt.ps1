@@ -11,9 +11,11 @@
     builds only the rest. docs/RELEASING.md and spec/spec-process-cicd-vcpkg-packages.md describe the whole scheme.
 
     -Fetch     Downloads the newest package set into -Destination. Only sets from trusted runs count: the workflow on
-               a push to dev / release / master, its weekly schedule, or a manual run (all need write access). Sets
-               from pull request runs are never used, so a pull request can't hand a release its own binaries. With no
-               set to fetch it warns and leaves -Destination empty: vcpkg then builds everything from source.
+               a push to dev / release / master, its weekly schedule, or a manual run, and only runs on one of those
+               branches (a manual run executes the workflow file of the branch it runs on, so one on any other branch
+               could upload anything). Sets from pull request runs are never used, so a pull request can't hand a
+               release its own binaries. With no set to fetch it warns and leaves -Destination empty: vcpkg then builds
+               everything from source.
                Needs gh with GH_TOKEN (actions: read).
 
     -Prune     Deletes every package in -Cache that the install in -Installed doesn't use (older ABIs pile up as ports
@@ -47,8 +49,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-# Runs whose package sets may be used: they need write access to start
+# Runs whose package sets may be used: they need write access to start, and they ran the workflow file of a branch
+# that only takes reviewed changes
 $TrustedEvents = @('push', 'schedule', 'workflow_dispatch')
+$TrustedBranches = @('dev', 'release', 'master')
 
 function Write-Summary([string[]]$Lines) {
     if ($env:GITHUB_STEP_SUMMARY) { Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $Lines -Encoding utf8 }
@@ -78,7 +82,9 @@ if ($Fetch) {
         return
     }
     $json = ($list | Where-Object { $_ -is [string] }) -join "`n"		# stdout only: gh's notices on stderr aren't JSON
-    $candidates = @($json | ConvertFrom-Json | Where-Object { $TrustedEvents -contains $_.event } | Sort-Object createdAt -Descending)
+    $candidates = @($json | ConvertFrom-Json |
+        Where-Object { $TrustedEvents -contains $_.event -and $TrustedBranches -ccontains $_.headBranch } |
+        Sort-Object createdAt -Descending)
 
     foreach ($run in $candidates) {
         $artifact = & gh api "repos/$Repository/actions/runs/$($run.databaseId)/artifacts" --jq ".artifacts[] | select(.name == `"$ArtifactName`" and .expired == false) | .id" 2>$null

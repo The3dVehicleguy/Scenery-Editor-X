@@ -80,6 +80,27 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # The gate's token can't see draft releases; this job's (contents: write) can. A draft for the tag stops the run here,
+  # before the Windows build, instead of only at the publish job hours later. Nothing from the repository runs here.
+  drafts:
+    name: No release for the tag yet
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: No release for this tag yet, drafts included
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | if .draft then \"draft\" else \"published\" end")
+          if [ -n "${existing}" ]; then
+            echo "::error title=Release::${TAG} has a release already (${existing}): delete it on GitHub, or release a new version"
+            exit 1
+          fi
+
   unit-tests:
     name: Unit tests
     needs: gate
@@ -87,7 +108,9 @@ jobs:
 
   windows:
     name: Windows installer
-    needs: gate
+    needs: [ gate, drafts ]
+    # drafts runs only for a pushed tag: skipped (a pull request, a manual run) doesn't stop the build
+    if: ${{ !cancelled() && needs.gate.result == 'success' && needs.drafts.result != 'failure' }}
     runs-on: windows-latest
     timeout-minutes: 300
     permissions:
@@ -247,8 +270,8 @@ jobs:
             echo "Installed editors find this release by themselves (once a day at startup, or Help > Check for Updates)."
           } > "${RUNNER_TEMP}/notes.md"
 
-      # The gate's token can't see draft releases; this job's (contents: write) can. A draft for the tag already there
-      # stops the publish instead of leaving two releases for one version.
+      # Checked again (the drafts job ran hours ago): a draft for the tag made since stops the publish instead of
+      # leaving two releases for one version
       - name: No release for this tag yet, drafts included
         env:
           GH_TOKEN: ${{ github.token }}

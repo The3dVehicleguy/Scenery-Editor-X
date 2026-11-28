@@ -1,8 +1,8 @@
 ---
 title: CI/CD Workflow Specification - vcpkg Packages
-version: 1.0
+version: 1.1
 date_created: 2026-11-27
-last_updated: 2026-11-27
+last_updated: 2026-11-28
 owner: Scenery Editor X maintainers
 tags: [process, cicd, github-actions, automation, vcpkg, binary-cache, release, windows]
 ---
@@ -21,7 +21,7 @@ Triplet `x64-windows` (the only shipped package today).
 | Package | One vcpkg port built for the triplet, stored as `<first two hex digits>/<ABI>.zip` |
 | ABI | SHA-256 of the package's `vcpkg_abi_info.txt`: port version, features, triplet, compiler and dependency ABIs |
 | Package set | The folder of packages one producer run leaves, plus `manifest.json`; uploaded as artifact `vcpkg-x64-windows` |
-| Trusted run | A producer run started by a push to `dev` / `release` / `master`, the schedule, or a manual run (all need write access) |
+| Trusted run | A producer run on `dev` / `release` / `master` started by a push, the schedule, or by hand (all need write access) |
 | Restore | vcpkg copying a package whose ABI matches instead of building it |
 
 ## Execution Flow Diagram
@@ -80,7 +80,7 @@ graph TD
 
 | ID | Requirement | Implementation Constraint |
 |----|-------------|---------------------------|
-| SEC-001 | Only trusted runs' sets are used | Fetch keeps runs whose event is push (to dev / release / master), schedule or workflow_dispatch; pull request runs are skipped even when newer |
+| SEC-001 | Only trusted runs' sets are used | Fetch keeps runs whose event is push, schedule or workflow_dispatch and whose branch is dev, release or master; pull request runs, and manual runs on other branches (they run that branch's copy of the workflow), are skipped even when newer |
 | SEC-002 | Consumers can't change the set | The consumer's binary source is read-only; only the producer uploads |
 | SEC-003 | Least privilege | Producer and consumer jobs: `contents: read`, `actions: read`; no secrets; the workflow token only |
 | SEC-004 | Only GitHub-owned actions | The repository's Actions policy allows `actions/*` and two listed actions; anything else stops the workflow |
@@ -229,6 +229,7 @@ run summary: markdown               # Producer: package table. Consumer: which r
 | Release from `release` while the newest set was built from `dev` | Matching ports restore (same manifest at merge time) | Consumer restore count |
 | Producer runs concurrently with a release | Release uses the newest set that existed when it fetched | Consumer summary |
 | Fork pull request changes the scripts | Its run uploads a set no one uses (SEC-001) | Fetch skips `pull_request` runs |
+| Manual run on a feature branch | Its set is never used (SEC-001): that branch's workflow file could upload anything | Fetch skips runs off dev / release / master |
 | Schedule before this workflow reaches `master` | No scheduled runs (schedules use the default branch's file) | Actions tab; run the producer manually |
 
 ## Validation Criteria
@@ -236,7 +237,7 @@ run summary: markdown               # Producer: package table. Consumer: which r
 ### Workflow Validation
 
 - **VLD-001**: `actionlint` and `shellcheck` pass (Validate GitHub forms and workflows).
-- **VLD-002**: Fetch, run locally against the repository, ignores pull request runs and downloads the newest trusted run's artifact.
+- **VLD-002**: Fetch, run locally against the repository, ignores pull request runs and runs off dev / release / master, and downloads the newest trusted run's artifact.
 - **VLD-003**: Prune, run locally on a cache with extra packages, keeps exactly the installed ABIs and writes a valid `manifest.json`.
 - **VLD-004**: A release dry run after a producer run reports restored packages and no port builds.
 
@@ -260,6 +261,7 @@ run summary: markdown               # Producer: package table. Consumer: which r
 | Version | Date | Changes | Author |
 |---------|------|---------|--------|
 | 1.0 | 2026-11-27 | Initial specification | Scenery Editor X maintainers (with Claude Code) |
+| 1.1 | 2026-11-28 | Trusted runs must also be on dev / release / master (manual runs on other branches skipped) | Scenery Editor X maintainers (with Claude Code) |
 
 ## Related Specifications
 
