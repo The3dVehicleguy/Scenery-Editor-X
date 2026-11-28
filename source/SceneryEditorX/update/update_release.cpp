@@ -30,6 +30,7 @@
  */
 #include "update_release.h"
 #include <algorithm>
+#include <cstdio>
 #include <nlohmann/json.hpp>
 #include <SceneryEditorX/utils/sha256.h>
 
@@ -441,6 +442,32 @@ namespace SceneryEditorX::Update
 		while (!out.empty() && out.back() == '\n')
 			out.pop_back();
 		return out;
+	}
+
+	std::string FormatUtcTime(const std::int64_t seconds)
+	{
+		std::int64_t days = seconds / 86400;
+		std::int64_t time = seconds % 86400;
+		if (time < 0)
+		{
+			time += 86400;
+			--days;
+		}
+		// Days since 1970-01-01 to year / month / day (Howard Hinnant's civil_from_days)
+		days += 719468;
+		const std::int64_t era = (days >= 0 ? days : days - 146096) / 146097;
+		const std::int64_t dayOfEra = days - era * 146097;
+		const std::int64_t yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+		const std::int64_t dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+		const std::int64_t monthIndex = (5 * dayOfYear + 2) / 153;	// March = 0
+		const std::int64_t day = dayOfYear - (153 * monthIndex + 2) / 5 + 1;
+		const std::int64_t month = monthIndex < 10 ? monthIndex + 3 : monthIndex - 9;
+		const std::int64_t year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
+
+		char text[64];
+		snprintf(text, sizeof(text), "%04lld-%02lld-%02lld %02lld:%02lld UTC", static_cast<long long>(year), static_cast<long long>(month),
+			static_cast<long long>(day), static_cast<long long>(time / 3600), static_cast<long long>(time % 3600 / 60));
+		return text;
 	}
 
 	std::string SafeFileName(const std::string_view name)

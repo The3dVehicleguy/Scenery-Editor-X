@@ -158,6 +158,7 @@ namespace SceneryEditorX::Update
 			std::uint64_t received = 0;
 			bool tooLarge = false;
 			bool reportProgress = false;
+			long timeoutSeconds = 0;	// Whole transfer; 0 for none (a setup may take long on a slow line)
 		};
 
 		std::size_t WriteData(const char *data, const std::size_t size, const std::size_t count, void *userdata)
@@ -227,8 +228,8 @@ namespace SceneryEditorX::Update
 			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
 			curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 256L);
 			curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
-			if (api)
-				curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+			if (transfer.timeoutSeconds > 0)
+				curl_easy_setopt(curl, CURLOPT_TIMEOUT, transfer.timeoutSeconds);
 			curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteData);
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &transfer);
@@ -269,6 +270,7 @@ namespace SceneryEditorX::Update
 			body.clear();
 			Transfer transfer;
 			transfer.limit = limit;
+			transfer.timeoutSeconds = 30;	// Small answers (the release, a checksum listing): never worth waiting longer
 			transfer.sink = [&body](const char *data, const std::size_t size)
 			{
 				body.append(data, size);

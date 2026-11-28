@@ -164,6 +164,12 @@ namespace SceneryEditorX::Update
 	 * '_' replaced by '_', leading dots dropped. Never empty, never a path.
 	 */
 	std::string SafeFileName(std::string_view name);
+
+	/**
+	 * @brief Unix seconds as "2026-11-27 14:05 UTC" (proleptic Gregorian calendar, any year the 64-bit count reaches).
+	 * Plain arithmetic, not <chrono>'s calendar types, so every standard library formats it the same.
+	 */
+	std::string FormatUtcTime(std::int64_t seconds);
 }
 
 // -------------------------------------------------------

@@ -64,6 +64,15 @@ namespace SceneryEditorX::EditorUpdates
 		using Update::UpdateClient;
 		using UpdateState = Update::State;
 
+		/* @brief The parts of a release the window shows every frame, worked out once per release. */
+		struct ReleaseView
+		{
+			std::string tag;				// The release these were made for
+			std::string notes;				// Plain text
+			bool hasInstaller = false;		// It has a Windows setup (FindWindowsInstaller)
+			std::uint64_t installerSize = 0;
+		};
+
 		struct State
 		{
 			bool initialized = false;
@@ -80,8 +89,8 @@ namespace SceneryEditorX::EditorUpdates
 			Update::Status status;			// The client's status: copied in Tick when it changes, read by the drawing
 			std::uint64_t seenGeneration = 0;
 
-			std::string notesTag;			// Release the plain-text notes below were made for
-			std::string notes;
+			ReleaseView view;				// What the window shows of the release found, made once per release
+			bool confirmInstall = false;	// Install was clicked with unsaved changes: asking before closing
 			std::string launchError;		// Why the setup didn't start
 		};
 
@@ -122,20 +131,6 @@ namespace SceneryEditorX::EditorUpdates
 			return releases;
 		}
 
-		/* @brief Unix seconds as "2026-11-27 14:05 UTC". */
-		std::string FormatUtc(const std::int64_t seconds)
-		{
-			using namespace std::chrono;
-			const sys_seconds time{ std::chrono::seconds(seconds) };
-			const sys_days day = floor<days>(time);
-			const year_month_day date{ day };
-			const hh_mm_ss<std::chrono::seconds> clock{ time - day };
-			char text[40];
-			snprintf(text, sizeof(text), "%04d-%02u-%02u %02d:%02d UTC", static_cast<int>(date.year()), static_cast<unsigned>(date.month()),
-				static_cast<unsigned>(date.day()), static_cast<int>(clock.hours().count()), static_cast<int>(clock.minutes().count()));
-			return text;
-		}
-
 		std::string Megabytes(const std::uint64_t bytes)
 		{
 			char text[32];
@@ -143,15 +138,18 @@ namespace SceneryEditorX::EditorUpdates
 			return text;
 		}
 
-		const std::string &PlainNotes(const Update::Release &release)
+		const ReleaseView &View(const Update::Release &release)
 		{
-			State &s = S();
-			if (s.notesTag != release.tag)
+			ReleaseView &view = S().view;
+			if (view.tag != release.tag)
 			{
-				s.notesTag = release.tag;
-				s.notes = Update::PlainTextNotes(release.notes);
+				view.tag = release.tag;
+				view.notes = Update::PlainTextNotes(release.notes);
+				const Update::ReleaseAsset *installer = Update::FindWindowsInstaller(release);
+				view.hasInstaller = installer != nullptr;
+				view.installerSize = installer ? installer->size : 0;
 			}
-			return s.notes;
+			return view;
 		}
 
 		void Skip(const std::string &version)
@@ -171,6 +169,7 @@ namespace SceneryEditorX::EditorUpdates
 		{
 			State &s = S();
 			s.launchError.clear();
+			s.confirmInstall = false;
 			std::string error;
 			if (!UpdateClient::LaunchInstaller(error))
 			{
@@ -195,7 +194,7 @@ namespace SceneryEditorX::EditorUpdates
 				ImGui::TextDisabled("|");
 				ImGui::SameLine();
 				// TRANSLATORS: {} is a date and time, e.g. 2026-11-27 14:05 UTC
-				ImGui::TextDisabled("%s", TrF("Last checked {}", FormatUtc(status.checkedAt)).c_str());
+				ImGui::TextDisabled("%s", TrF("Last checked {}", Update::FormatUtcTime(status.checkedAt)).c_str());
 			}
 			ImGui::Spacing();
 		}
@@ -206,8 +205,8 @@ namespace SceneryEditorX::EditorUpdates
 			const float dpi = Dpi();
 			const Update::Release &release = *status.release;
 			const std::string version = release.version.ToString();
-			const Update::ReleaseAsset *installer = Update::FindWindowsInstaller(release);
-			const bool canInstall = UpdateClient::CanInstall() && installer;
+			const ReleaseView &view = View(release);
+			const bool canInstall = UpdateClient::CanInstall() && view.hasInstaller;
 
 			ImGui::PushStyleColor(ImGuiCol_Text, Color(EditorTheme::Palette::AccentHovered));
 			// TRANSLATORS: {0} is the new version, {1} the installed one
@@ -219,7 +218,7 @@ namespace SceneryEditorX::EditorUpdates
 				ImGui::TextDisabled("%s", Tr("You chose to skip this version."));
 
 			ImGui::SeparatorText(Tr("What's new"));
-			const std::string &notes = PlainNotes(release);
+			const std::string &notes = view.notes;
 			if (ImGui::BeginChild("##ReleaseNotes", ImVec2(WIDTH * dpi, 220.0f * dpi), ImGuiChildFlags_Borders))
 			{
 				if (notes.empty())
@@ -231,6 +230,8 @@ namespace SceneryEditorX::EditorUpdates
 			ImGui::Spacing();
 
 			const ImVec2 button(0.0f, 0.0f);
+			if (status.state != UpdateState::Downloaded)
+				s.confirmInstall = false;
 			switch (status.state)
 			{
 				case UpdateState::Downloading:
@@ -249,17 +250,36 @@ namespace SceneryEditorX::EditorUpdates
 				{
 					ImGui::TextColored(Color(EditorTheme::Palette::Text), "%s %s", SEDX_ICON_CHECK_CIRCLE, Tr("Downloaded, and its SHA-256 matches the release."));
 					ImGui::TextWrapped("%s", Tr("Setup updates Scenery Editor X once the editor has closed. It shows what it will do before it starts."));
-					if (EditorProjects::IsDirty())
+					const bool unsaved = EditorProjects::IsDirty();
+					if (unsaved)
 					{
 						ImGui::PushStyleColor(ImGuiCol_Text, Color(EditorTheme::Palette::Warning));
 						ImGui::TextWrapped("%s", Tr("You have unsaved changes. Save them first: the editor closes when Setup starts."));
 						ImGui::PopStyleColor();
 					}
-					if (ImGui::Button(EditorUI::IconLabel(SEDX_ICON_DOWNLOAD, "Install and Close Editor").c_str(), button))
-						Install();
-					ImGui::SameLine();
-					if (ImGui::Button(TrL("Later##InstallLater"), button))
-						s.windowOpen = false;
+					if (s.confirmInstall && unsaved)
+					{
+						// Closing skips the usual question about unsaved changes: ask here instead
+						ImGui::TextWrapped("%s", Tr("Close without saving? The unsaved project changes are kept as recovery data and offered when the project opens again."));
+						if (ImGui::Button(EditorUI::IconLabel(SEDX_ICON_DOWNLOAD, "Install Without Saving").c_str(), button))
+							Install();
+						ImGui::SameLine();
+						if (ImGui::Button(TrL("Cancel##InstallConfirm"), button))
+							s.confirmInstall = false;
+					}
+					else
+					{
+						if (ImGui::Button(EditorUI::IconLabel(SEDX_ICON_DOWNLOAD, "Install and Close Editor").c_str(), button))
+						{
+							if (unsaved)
+								s.confirmInstall = true;
+							else
+								Install();
+						}
+						ImGui::SameLine();
+						if (ImGui::Button(TrL("Later##InstallLater"), button))
+							s.windowOpen = false;
+					}
 					if (!s.launchError.empty())
 					{
 						ImGui::PushStyleColor(ImGuiCol_Text, Color(EditorTheme::Palette::Error));
@@ -280,7 +300,7 @@ namespace SceneryEditorX::EditorUpdates
 					if (canInstall)
 					{
 						// TRANSLATORS: {} is the size of the setup in megabytes
-						const std::string label = EditorUI::IconLabel(SEDX_ICON_DOWNLOAD, TrF("Download and Install ({} MB)", Megabytes(installer->size))) + "###DownloadUpdate";
+						const std::string label = EditorUI::IconLabel(SEDX_ICON_DOWNLOAD, TrF("Download and Install ({} MB)", Megabytes(view.installerSize))) + "###DownloadUpdate";
 						if (ImGui::Button(label.c_str(), button))
 							UpdateClient::Download();
 						EditorUI::ItemTooltip("Downloads the Windows setup from the release, checks it against the SHA-256 the release publishes, then offers to install it");
@@ -559,7 +579,7 @@ namespace SceneryEditorX::EditorUpdates
 			"release is out. The request tells GitHub this editor's version, nothing else. Help > Check for Updates asks at any time."));
 		ImGui::Spacing();
 		if (status.checkedAt > 0)
-			ImGui::TextDisabled("%s", TrF("Last checked {}", FormatUtc(status.checkedAt)).c_str());
+			ImGui::TextDisabled("%s", TrF("Last checked {}", Update::FormatUtcTime(status.checkedAt)).c_str());
 		if (!preferences.skippedUpdate.empty())
 		{
 			ImGui::TextDisabled("%s", TrF("Skipped version: {}", preferences.skippedUpdate).c_str());
@@ -586,6 +606,7 @@ namespace SceneryEditorX::EditorUpdates
 		State &s = S();
 		s.windowOpen = true;
 		s.focusWindow = true;
+		s.confirmInstall = false;
 	}
 }
 

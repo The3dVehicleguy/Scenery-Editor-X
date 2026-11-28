@@ -349,6 +349,38 @@ TEST_CASE("Release notes lose their Markdown markup", "[update][notes]")
 	CHECK(PlainTextNotes("\n\n\n").empty());
 }
 
+TEST_CASE("Check times read as UTC dates", "[update][time]")
+{
+	CHECK(FormatUtcTime(0) == "1970-01-01 00:00 UTC");
+	CHECK(FormatUtcTime(-1) == "1969-12-31 23:59 UTC");
+	CHECK(FormatUtcTime(951782400) == "2000-02-29 00:00 UTC");			// A leap year divisible by 400
+	CHECK(FormatUtcTime(1709164800) == "2024-02-29 00:00 UTC");
+	CHECK(FormatUtcTime(1795834831) == "2026-11-28 03:00 UTC");
+	CHECK(FormatUtcTime(4102444800) == "2100-01-01 00:00 UTC");			// 2100 isn't a leap year
+	CHECK(FormatUtcTime(4107542400) == "2100-03-01 00:00 UTC");
+	CHECK(FormatUtcTime(253402300799) == "9999-12-31 23:59 UTC");
+
+	// Every day from 1969 to 2101 is the day after the one before
+	std::int64_t previousDay = -1;
+	std::string previous;
+	for (std::int64_t t = -86400 * 366; t < 4133980800; t += 86400)
+	{
+		const std::string text = FormatUtcTime(t);
+		REQUIRE(text.size() == 20);
+		const int year = std::stoi(text.substr(0, 4)), month = std::stoi(text.substr(5, 2)), day = std::stoi(text.substr(8, 2));
+		REQUIRE(month >= 1);
+		REQUIRE(month <= 12);
+		REQUIRE(day >= 1);
+		const bool leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+		constexpr int LENGTHS[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+		REQUIRE(day <= LENGTHS[month - 1] + (month == 2 && leap ? 1 : 0));
+		const std::int64_t ordinal = static_cast<std::int64_t>(year) * 400 + month * 32 + day;
+		REQUIRE(ordinal > previousDay);
+		previousDay = ordinal;
+		previous = text;
+	}
+}
+
 TEST_CASE("Downloaded files get safe names", "[update][files]")
 {
 	CHECK(SafeFileName("SceneryEditorX-0.2.130.631-Alpha-Setup.exe") == "SceneryEditorX-0.2.130.631-Alpha-Setup.exe");

@@ -372,6 +372,10 @@ msgstr ""
 msgid "Click to see what's new and update"
 msgstr ""
 
+#: source/Editor/core/editor_updates.cpp
+msgid "Close without saving? The unsaved project changes are kept as recovery data and offered when the project opens again."
+msgstr ""
+
 #. {} is the size of the setup in megabytes
 #: source/Editor/core/editor_updates.cpp
 #, python-brace-format
@@ -397,6 +401,10 @@ msgstr ""
 
 #: source/Editor/core/editor_updates.cpp
 msgid "Downloads the Windows setup from the release, checks it against the SHA-256 the release publishes, then offers to install it"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Install Without Saving"
 msgstr ""
 
 #: source/Editor/core/editor_updates.cpp
