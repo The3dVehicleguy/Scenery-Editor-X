@@ -255,8 +255,8 @@ namespace SceneryEditorX::XPlane
 			const UUID childId = registry.get<IDComponent>(child).pID;
 			registry.get<RelationshipComponent>(child).pParentHandle = parentId;
 			registry.get<RelationshipComponent>(parent).pChildren.push_back(childId);
-			Scene::ParentChanged(child);	// under a hidden parent, it is hidden too
 			Scene::MarkStructureChanged();
+			Scene::ParentChanged(child);	// under a hidden parent, it is hidden too
 		}
 
 		/* @brief A key for "the same terrain": frame, area rings and margin. */

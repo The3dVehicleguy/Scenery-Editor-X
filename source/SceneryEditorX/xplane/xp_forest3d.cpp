@@ -138,8 +138,8 @@ namespace SceneryEditorX::XPlane
 			const UUID childId = registry.get<IDComponent>(child).pID;
 			registry.get<RelationshipComponent>(child).pParentHandle = parentId;
 			registry.get<RelationshipComponent>(parent).pChildren.push_back(childId);
-			Scene::ParentChanged(child);	// under a hidden parent, it is hidden too
 			Scene::MarkStructureChanged();
+			Scene::ParentChanged(child);	// under a hidden parent, it is hidden too
 		}
 
 		Ref<ImageResource> LoadTexture(const fs::path &forestFile, const std::string &reference, const TextureUsage usage)

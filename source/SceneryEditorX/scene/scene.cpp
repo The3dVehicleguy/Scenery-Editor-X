@@ -777,6 +777,8 @@ namespace SceneryEditorX
 		// has left s_EntityPointers.
 		if (EntityRuntime *runtime = FindRuntime(entityHandle, s_ActiveScene.get()))
 		{
+			// Its children were destroyed above, so none is left holding the hiddenInTree this entity gave it. Should a
+			// path ever keep the children (reparenting them on delete), it must call ParentChanged for each.
 			if (runtime->hidden)
 			{
 				runtime->hidden = false;

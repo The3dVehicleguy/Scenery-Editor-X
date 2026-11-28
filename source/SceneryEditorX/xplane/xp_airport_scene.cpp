@@ -1341,8 +1341,8 @@ namespace SceneryEditorX::XPlane
 			const UUID childId = registry.get<IDComponent>(child).pID;
 			registry.get<RelationshipComponent>(child).pParentHandle = parentId;
 			registry.get<RelationshipComponent>(parent).pChildren.push_back(childId);
-			Scene::ParentChanged(child);	// under a hidden parent, it is hidden too
 			Scene::MarkStructureChanged(); // hierarchy caches (outliner roots, ...)
+			Scene::ParentChanged(child);   // under a hidden parent, it is hidden too
 		}
 
 		Ref<MaterialAsset> MakeMaterial(const Paint paint)
