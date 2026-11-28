@@ -39,6 +39,7 @@
 #include "editor_scene.h"
 #include "editor_selection.h"
 #include "editor_tools.h"
+#include "editor_updates.h"
 #include "editor_visibility.h"
 #include "editor_welcome.h"
 #include "project_dialogs.h"
@@ -307,6 +308,7 @@ namespace SceneryEditorX
 		EditorCamera::CaptureHome();
 		EditorCamera::ReadCommandLine();
 		EditorWelcome::Init();
+		EditorUpdates::Init();	// The update check at startup (at most once a day) and Help > Check for Updates
 		UpdateWindowTitle();
 
 		if (!ImGui::GetCurrentContext())
@@ -329,6 +331,7 @@ namespace SceneryEditorX
 		// The UI layer (an overlay) detaches first, so ImGui is already gone here: no ImGui calls.
 		Camera::SetInputEnabled(true);
 		Camera::SetInputExternal(false);
+		EditorUpdates::Shutdown();	// Stops a check or download in progress
 		EditorSettingsSerializer::Shutdown();	// The tools' snapping and gizmo options, when they changed
 		m_PanelManager.reset();
 		AssetThumbnails::Shutdown();	// Before the renderer frees the device: the thumbnail atlas is on the GPU
@@ -447,6 +450,7 @@ namespace SceneryEditorX
 		EditorVisibility::Tick(&m_Context);
 
 		HandleShortcuts();
+		EditorUpdates::Tick();	// The startup update check, and its window once the startup modals are closed
 
 		// Order matters: each side bar shrinks the viewport work area the dockspace then fills.
 		DrawMenuBar();
@@ -525,6 +529,7 @@ namespace SceneryEditorX
 		}
 
 		DrawAboutPopup();
+		EditorUpdates::Draw();	// Software Update
 		EditorWelcome::Draw();	// First-launch keymap choice and Edit > Preferences
 		DrawDebugWindows();
 		EditorAirports::DrawModals(&m_Context);
@@ -546,6 +551,7 @@ namespace SceneryEditorX
 		{
 			if (ImGui::MenuItem(TrL("About Scenery Editor X")))
 				m_ShowAbout = true;
+			EditorUpdates::DrawMenuItems();
 			if (ImGui::MenuItem(TrL("Choose a Navigation Keymap...")))
 				EditorWelcome::OpenWelcome();
 			if (ImGui::MenuItem(TrL("Controls && Shortcuts...")))
@@ -837,6 +843,9 @@ namespace SceneryEditorX
 			ImGui::SameLine(0.0f, 20.0f * dpi);
 			EditorXPlane::DrawObjectLoadProgress(260.0f * dpi);
 
+			// An update found or downloading (click: Software Update)
+			EditorUpdates::DrawStatusBarItem(20.0f * dpi);
+
 			// Right: frame time, GPU memory, version
 			// GPU memory walks every allocation; twice a second is plenty for a status readout.
 			static GPUMemoryStats s_Memory;
@@ -1039,6 +1048,12 @@ namespace SceneryEditorX
 			ImGui::Spacing();
 			ImGui::TextDisabled("Dear ImGui %s (docking)", IMGUI_VERSION);
 			ImGui::Spacing();
+			if (ImGui::Button(TrL("Check for Updates...##About")))
+			{
+				EditorUpdates::CheckNow();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
 			if (ImGui::Button("Close", ImVec2(120.0f * ImGui::GetStyle().FontScaleDpi, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
 				ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();

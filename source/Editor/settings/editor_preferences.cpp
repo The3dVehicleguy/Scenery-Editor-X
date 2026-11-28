@@ -98,6 +98,13 @@ namespace SceneryEditorX
 					camera.orthographic = viewport->value("orthographic", camera.orthographic);
 					camera.preset = std::clamp(viewport->value("preset", camera.preset), 0, 6);
 				}
+				if (const auto updates = root.find("updates"); updates != root.end() && updates->is_object())
+				{
+					if (const auto check = updates->find("check_at_startup"); check != updates->end() && check->is_boolean())
+						out.checkForUpdates = check->get<bool>();
+					if (const auto skipped = updates->find("skipped_version"); skipped != updates->end() && skipped->is_string())
+						out.skippedUpdate = skipped->get<std::string>();
+				}
 			}
 			catch (const std::exception &e)
 			{
@@ -156,6 +163,7 @@ namespace SceneryEditorX
 			root["viewport2"] = { { "pivot", { camera.pivot[0], camera.pivot[1], camera.pivot[2] } }, { "distance", camera.distance }, { "yaw", camera.yaw },
 				{ "pitch", camera.pitch }, { "fov", camera.fovHorizontal }, { "orthographic", camera.orthographic }, { "preset", camera.preset } };
 		}
+		root["updates"] = { { "check_at_startup", p.checkForUpdates }, { "skipped_version", p.skippedUpdate } };
 
 		std::string error;
 		if (!VFS::Get().Write(PREFERENCES_FILE, root.dump(4) + "\n", &error))

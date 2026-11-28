@@ -6,7 +6,8 @@
 #
 #   bash scripts/ci/build_unit_tests.sh [--no-run] [Suite ...]
 #
-# Suites: ConversionTests RefTests XPlaneFormatTests ProjectFormatTests EnvironmentTests SettingsTest I18nTests (default: all).
+# Suites: ConversionTests RefTests XPlaneFormatTests ProjectFormatTests EnvironmentTests SettingsTest I18nTests UpdateTests
+# (default: all).
 # Fetch the submodules first (they use SSH URLs):
 #   git -c url."https://github.com/".insteadOf="git@github.com:" submodule update --init --depth 1 \
 #       dependency/json dependency/Catch2 dependency/libconfig
@@ -116,7 +117,7 @@ if [ "${1:-}" = --compile-one ]; then
 	exit 0
 fi
 
-ALL_SUITES="ConversionTests RefTests XPlaneFormatTests ProjectFormatTests EnvironmentTests SettingsTest I18nTests"
+ALL_SUITES="ConversionTests RefTests XPlaneFormatTests ProjectFormatTests EnvironmentTests SettingsTest I18nTests UpdateTests"
 RUN=1
 SUITES=""
 for arg in "$@"; do
@@ -177,6 +178,8 @@ suite_sources()
 				$SE/settings/config_file.cpp $SE/filesystem/vfs.cpp $LC/libconfigcpp.cc ;;
 		I18nTests)
 			echo std source/Tests/i18n_tests/*.cpp $SE/i18n/*.cpp ;;
+		UpdateTests)
+			echo std source/Tests/update_tests/*.cpp $SE/update/update_release.cpp $SE/utils/sha256.cpp ;;
 	esac
 }
 

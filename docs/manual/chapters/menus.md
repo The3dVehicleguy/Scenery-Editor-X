@@ -128,6 +128,8 @@ The menu ends with the X-Plane folder in use, or what's wrong with it.
 
 | Item | What it does |
 |---|---|
-| About Scenery Editor X | The version and build configuration, the license, and the Dear ImGui version. Quote the version when you report a problem. |
+| About Scenery Editor X | The version and build configuration, the license, and the Dear ImGui version. Quote the version when you report a problem. **Check for Updates…** in it does the same as the menu item. |
+| Update *version* Available… | Only when a newer release was found: opens **Software Update** on it. |
+| Check for Updates… | Asks GitHub for the newest release now and shows the answer in **Software Update**, a version you skipped included. See [Updating from the editor](installing.md#updating-from-the-editor). |
 | Choose a Navigation Keymap… | The first-launch keymap window. |
 | Controls & Shortcuts… | The preferences, with the bindings for your keymap and the tool shortcuts. |

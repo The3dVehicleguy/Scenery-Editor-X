@@ -28,6 +28,8 @@
             { "path": "BUILD_SETUP_WINDOWS.md", "title": "Windows build setup" },
             { "path": "AGENTS.md", "title": "Test suites and headless builds" },
             { "path": "installer/README.md", "title": "The Windows installer" },
+            { "path": "docs/RELEASING.md", "title": "Releasing and the update check" },
+            { "path": ".github/workflows/README.md", "title": "Continuous integration workflows" },
             { "path": "docs/coding-style.md", "title": "Coding style" },
             { "path": "docs/third_party/README.md", "title": "Third-party code and licenses" },
             { "path": "SECURITY.md", "title": "Security policy" }

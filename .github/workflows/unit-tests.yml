@@ -4,20 +4,24 @@
 # isn't built here. scripts/ci/build_unit_tests.sh does the work, so a failing job can be repeated locally with the
 # same command. Each job uploads its Catch2 JUnit reports and writes a per-suite table to the run summary. Each job
 # also runs cmake/tests/triplet_detection.cmake, which checks the vcpkg triplet a plain configure picks.
+# The release workflow (release.yml) calls it too: a release is only published when every platform passes.
 name: Unit tests
 
 on:
   pull_request:
-    branches: [ dev ]
+    branches: [ dev, release ]
   push:
-    branches: [ dev, master ]
+    branches: [ dev, master, release ]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
+# github.workflow is the caller's name when release.yml calls this one, so the two runs for one pull request don't
+# cancel each other
 concurrency:
-  group: unit-tests-${{ github.event.pull_request.number || github.ref }}
+  group: unit-tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:

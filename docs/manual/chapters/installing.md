@@ -69,6 +69,19 @@ You don't need to keep the setup file to repair the editor. Setup keeps a copy o
 
 If the editor was installed for all users and you aren't an administrator, setup can't update that copy. It offers to install a separate copy just for you instead.
 
+### Updating from the editor
+
+You don't have to look for new versions yourself. A few seconds after it starts, at most once a day, the editor asks GitHub whether a newer release of Scenery Editor X has been published. The request tells GitHub the editor's version and nothing else. When there is one, the **Software Update** window opens once the startup windows are closed, with what's new in it:
+
+- **Download and Install** (Windows) downloads the release's setup and checks it against the SHA-256 the release publishes: a download that doesn't match is thrown away. Then **Install and Close Editor** starts setup and closes the editor, and setup's **Update** page takes it from there. Save your work first.
+- **Release Page** opens the release on GitHub, to download it yourself (on macOS and Linux, the only way for now).
+- **Skip This Version** stops the startup check from offering that version. **Help › Check for Updates…** still shows it, and **Edit › Preferences… › Updates › Offer It Again** undoes the skip.
+- **Remind Me Later** closes the window. The status bar keeps showing *Update version available*; click it to come back.
+
+Turn the check off with **Check for updates at startup** in the window or in **Edit › Preferences… › Updates**; **Help › Check for Updates…** still works. If the editor can't reach GitHub, it tries again at the next start and offers what it found last time, if anything.
+
+Only releases published from the project's `release` branch are offered, and only from the project's own GitHub page: the editor refuses downloads from anywhere else.
+
 ### Uninstalling
 
 Uninstall from **Windows Settings › Apps › Installed apps**, or from the maintenance page of any setup program. The uninstaller removes exactly the files it installed, its shortcuts and the file associations.

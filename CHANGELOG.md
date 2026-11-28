@@ -9,6 +9,26 @@ versions.
 
 ### Added
 
+- **Update check and release pipeline** (0.2.128.629). A few seconds after it starts, at most once a day, the editor
+  asks GitHub whether a newer release of Scenery Editor X is out (**Edit › Preferences… › Updates** turns that off;
+  **Help › Check for Updates…** and the About box ask at any time). When one is, the **Software Update** window opens
+  once the startup windows are closed, with the release notes: on Windows, **Download and Install** downloads the
+  release's setup, checks it against the SHA-256 the release publishes (a download that doesn't match is thrown away),
+  and **Install and Close Editor** starts it as the editor closes; elsewhere **Release Page** opens the release.
+  **Skip This Version** and **Remind Me Later** are there too, and the status bar shows the update until it's
+  installed. Offline, a start offers what the last check found. Only files of this repository's releases are
+  downloaded. Command line: `--check-updates`, `--no-update-check`, `--update-url <url>` (a test server).
+  Releases are now published only by `.github/workflows/release.yml`, for a pushed tag `v<version>` on the new
+  `release` branch: its gate (`scripts/ci/release_gate.sh`) checks that the tag matches `source/resource.h`, is on
+  `release`, is newer than every release and has a `## <version>` section here (the release notes); then the unit
+  tests run on Linux, macOS and Windows and a Windows runner builds the Release editor and its installer
+  (`scripts/ci/build_release_windows.ps1`, which also starts the staged editor to check its files load), before the
+  release is created with the setup, its `.sha256` and `SHA256SUMS.txt`. Pull requests that change the pipeline get
+  a dry run that publishes nothing. The procedure is in `docs/RELEASING.md`, the workflows are listed in
+  `.github/workflows/README.md`. For developers: `SceneryEditorX/update/` (`update_release.*`, standard library only,
+  covered by the new `UpdateTests` suite; `update_client.*`, libcurl), `utils/sha256.*`, `Editor/core/editor_updates.*`;
+  `unit-tests.yml` can be called by other workflows and runs on `release` as well.
+
 - **Hide, isolate and lock** (0.2.120.621, issue #104; review follow-ups 0.2.121.622, 0.2.122.623, 0.2.123.624, 0.2.124.625, 0.2.125.626, 0.2.126.627, 0.2.127.628). Each OUTLINER row has an eye and a lock toggle on its left;
   a drag down either column sets every row it crosses, as one undo step, and a hidden or locked row covers what is
   below it (shown with a dimmed icon). Hiding is view-only: hidden things aren't drawn, hovered, picked, box-selected
