@@ -238,6 +238,18 @@ jobs:
             echo "Installed editors find this release by themselves (once a day at startup, or Help > Check for Updates)."
           } > "${RUNNER_TEMP}/notes.md"
 
+      # The gate's token can't see draft releases; this job's (contents: write) can. A draft for the tag already there
+      # stops the publish instead of leaving two releases for one version.
+      - name: No release for this tag yet, drafts included
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | if .draft then \"draft\" else \"published\" end")
+          if [ -n "${existing}" ]; then
+            echo "::error title=Release::${TAG} has a release already (${existing}): delete it on GitHub, or release a new version"
+            exit 1
+          fi
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

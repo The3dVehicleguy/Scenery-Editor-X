@@ -244,6 +244,24 @@ TEST_CASE("Only the repository's release files are trusted downloads", "[update]
 	CHECK_FALSE(IsReleaseDownloadUrl(base + "v1/a.exe", ""));
 }
 
+TEST_CASE("Only servers on this computer are test servers", "[update][url]")
+{
+	for (const char *local : { "http://127.0.0.1:8765/latest.json", "http://127.0.0.1/x", "https://127.0.0.1", "http://localhost:8000/a.json",
+		"HTTP://LocalHost/a", "http://[::1]:9000/latest.json", "http://[::1]", "http://127.0.0.1?x=1", "http://localhost#frag" })
+	{
+		INFO(local);
+		CHECK(IsLoopbackUrl(local));
+	}
+	for (const char *remote : { "http://example.com/latest.json", "https://api.github.com/repos/x/y/releases/latest",
+		"http://127.0.0.1@example.com/latest.json", "http://user@localhost/a", "http://localhost.example.com/a",
+		"http://127.0.0.10/a", "http://127.0.0.2/a", "http://[::1]x/a", "http://[::1", "ftp://127.0.0.1/a", "file:///C:/a.json",
+		"127.0.0.1:8765/latest.json", "", "http://", "http://127.0.0.1\\@example.com/" })
+	{
+		INFO(remote);
+		CHECK_FALSE(IsLoopbackUrl(remote));
+	}
+}
+
 TEST_CASE("An automatic check is due once a day", "[update][schedule]")
 {
 	constexpr std::int64_t DAY = 24 * 60 * 60;

@@ -328,6 +328,35 @@ namespace SceneryEditorX::Update
 		return url.size() > prefix.size() && StartsWithNoCase(url, prefix) && url.find("/../") == std::string_view::npos;
 	}
 
+	bool IsLoopbackUrl(const std::string_view url)
+	{
+		std::string_view rest;
+		if (StartsWithNoCase(url, "http://"))
+			rest = url.substr(7);
+		else if (StartsWithNoCase(url, "https://"))
+			rest = url.substr(8);
+		else
+			return false;
+
+		const std::string_view authority = rest.substr(0, rest.find_first_of("/?#"));
+		if (authority.find('@') != std::string_view::npos || authority.find_first_of(" \\") != std::string_view::npos)
+			return false;
+		std::string_view host = authority;
+		if (host.starts_with('['))
+		{
+			const size_t close = host.find(']');
+			if (close == std::string_view::npos)
+				return false;
+			const std::string_view after = host.substr(close + 1);
+			if (!after.empty() && after.front() != ':')
+				return false;
+			host = host.substr(0, close + 1);
+		}
+		else if (const size_t colon = host.find(':'); colon != std::string_view::npos)
+			host = host.substr(0, colon);
+		return host == "127.0.0.1" || EqualsNoCase(host, "localhost") || host == "[::1]";
+	}
+
 	bool IsCheckDue(const std::int64_t lastCheck, const std::int64_t now, const std::int64_t interval)
 	{
 		if (lastCheck <= 0 || now < lastCheck)

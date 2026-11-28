@@ -44,7 +44,8 @@ namespace SceneryEditorX::EditorUpdates
 	 * page. The status bar shows an available update until it's installed or skipped.
 	 *
 	 * Command line: --no-update-check (no check at startup), --check-updates (check now, even in a scripted run, and
-	 * show the window), --update-url <url> (read the newest release from a test server instead of GitHub),
+	 * show the window), --update-url <url> (read the newest release from a test server instead of GitHub; only one on this
+	 * computer may use http and serve its own downloads),
 	 * --update-download (download the update a check finds, as Download and Install does; for testing).
 	 * Runs started with other flags (self-tests, captures, scripted exports) don't check, apart from --project
 	 * (opening a project file from Explorer).

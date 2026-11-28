@@ -123,6 +123,13 @@ namespace SceneryEditorX::Update
 	bool IsReleaseDownloadUrl(std::string_view url, std::string_view repository);
 
 	/**
+	 * @brief Whether a URL is on this computer: http or https to 127.0.0.1, localhost or [::1] (any port), with no user
+	 * name in it ("http://127.0.0.1@example.com/" is example.com). Only such a test server (--update-url) may use plain
+	 * http and serve its own downloads.
+	 */
+	bool IsLoopbackUrl(std::string_view url);
+
+	/**
 	 * @brief Whether the automatic check is due: never checked (lastCheck 0), the clock went back past the last
 	 * check, or interval seconds have passed since it.
 	 */

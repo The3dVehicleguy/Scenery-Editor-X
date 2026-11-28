@@ -9,7 +9,7 @@ versions.
 
 ### Added
 
-- **Update check and release pipeline** (0.2.128.629; review follow-up 0.2.129.630: a 404 from GitHub keeps an update found before, the client's thread is joined at exit; 0.2.130.631: setups named with a three-part version are found, the update thread can't start after shutdown, and on Windows the checked setup stays locked against changes until it runs, so it isn't hashed again on the main thread). A few seconds after it starts, at most once a day, the editor
+- **Update check and release pipeline** (0.2.128.629; review follow-up 0.2.129.630: a 404 from GitHub keeps an update found before, the client's thread is joined at exit; 0.2.130.631: setups named with a three-part version are found, the update thread can't start after shutdown, and on Windows the checked setup stays locked against changes until it runs, so it isn't hashed again on the main thread; 0.2.131.632: only a test server on this computer may use plain http or serve its own downloads, older system libcurl versions build, and a draft release for the tag stops the publish). A few seconds after it starts, at most once a day, the editor
   asks GitHub whether a newer release of Scenery Editor X is out (**Edit › Preferences… › Updates** turns that off;
   **Help › Check for Updates…** and the About box ask at any time). When one is, the **Software Update** window opens
   once the startup windows are closed, with the release notes: on Windows, **Download and Install** downloads the

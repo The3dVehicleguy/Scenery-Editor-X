@@ -209,10 +209,17 @@ namespace SceneryEditorX::Update
 
 			const std::string agent = UserAgent();
 			char errorBuffer[CURL_ERROR_SIZE] = {};
-			const char *protocols = testServer ? "http,https" : "https";
 			curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+			// Plain http only for a test server on this computer (Init checks): redirects can't leave https otherwise
+#if LIBCURL_VERSION_NUM >= 0x075500	// 7.85: the string options; the bitmask ones are deprecated since
+			const char *protocols = testServer ? "http,https" : "https";
 			curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, protocols);
 			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, protocols);	// Release files redirect to GitHub's file host
+#else	// An older system libcurl (Linux distributions)
+			const long protocols = testServer ? static_cast<long>(CURLPROTO_HTTP | CURLPROTO_HTTPS) : static_cast<long>(CURLPROTO_HTTPS);
+			curl_easy_setopt(curl, CURLOPT_PROTOCOLS, protocols);
+			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, protocols);
+#endif
 			curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 			curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
 			curl_easy_setopt(curl, CURLOPT_USERAGENT, agent.c_str());		// GitHub's API refuses requests without one
@@ -533,6 +540,12 @@ namespace SceneryEditorX::Update
 #endif
 		}
 
+		/* @brief A file the client may download: one of the repository's release files, or one on a test server on this computer. */
+		bool IsTrustedDownload(const std::string_view url, const bool testServer)
+		{
+			return IsReleaseDownloadUrl(url, REPOSITORY) || (testServer && IsLoopbackUrl(url));
+		}
+
 		/**
 		 * @brief The SHA-256 the release publishes for a file: GitHub's digest, else <file>.sha256, else SHA256SUMS.txt.
 		 * Empty when there is none (error says why) or the download was cancelled while a listing was read (cancelled).
@@ -548,7 +561,7 @@ namespace SceneryEditorX::Update
 				const ReleaseAsset *listing = FindAsset(release, name);
 				if (!listing)
 					continue;
-				if (!testServer && !IsReleaseDownloadUrl(listing->downloadUrl, REPOSITORY))
+				if (!IsTrustedDownload(listing->downloadUrl, testServer))
 					continue;
 				std::string body;
 				HttpResult result;
@@ -594,7 +607,7 @@ namespace SceneryEditorX::Update
 				});
 			};
 
-			if (!testServer && !IsReleaseDownloadUrl(installer.downloadUrl, REPOSITORY))
+			if (!IsTrustedDownload(installer.downloadUrl, testServer))
 			{
 				fail("the setup isn't a release file of " + std::string(REPOSITORY) + ": " + installer.downloadUrl);
 				return;
@@ -739,9 +752,18 @@ namespace SceneryEditorX::Update
 		ClientState &s = S();
 		if (s.initialized.load())
 			return;
+		// Plain http and the server's own downloads are allowed only for a test server on this computer; any other
+		// address gets the rules GitHub does (https, the repository's release files only)
+		ClientOptions accepted = options;
+		if (accepted.testServer && !IsLoopbackUrl(accepted.latestReleaseUrl))
+		{
+			accepted.testServer = false;
+			SEDX_CORE_WARN_TAG(LOG_TAG, "{} isn't on this computer: it must use https, and only {}'s release files are downloaded",
+				accepted.latestReleaseUrl, REPOSITORY);
+		}
 		{
 			std::scoped_lock lock(s.mutex);
-			s.options = options;
+			s.options = accepted;
 		}
 		// Reference counted: the Gateway client shares it. Without it no check could work: stay uninitialized and say so
 		if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK)
@@ -756,8 +778,8 @@ namespace SceneryEditorX::Update
 		}
 		s.curlReady.store(true);
 		RemoveOldDownloads();
-		if (options.testServer)
-			SEDX_CORE_WARN_TAG(LOG_TAG, "Update checks use a test server: {}", options.latestReleaseUrl);
+		if (accepted.testServer)
+			SEDX_CORE_WARN_TAG(LOG_TAG, "Update checks use a test server: {}", accepted.latestReleaseUrl);
 		s.initialized.store(true);	// Last: nothing starts before libcurl is ready
 	}
 

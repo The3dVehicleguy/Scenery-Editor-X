@@ -98,20 +98,33 @@ The update check ([`source/SceneryEditorX/update/`](../source/SceneryEditorX/upd
   release without either can't be installed from the editor.
 - A fork builds with `-DSEDX_UPDATE_REPOSITORY="owner/name"` (a compile definition) to follow its own releases.
 
-To try the update window without publishing anything, serve a JSON file shaped like GitHub's answer and start the
-editor with `--check-updates --update-url http://127.0.0.1:8000/latest.json` (with that option plain `http` and any
-download address are accepted). [`source/Tests/update_tests/UpdateTests.cpp`](../source/Tests/update_tests/UpdateTests.cpp)
-has an example of the JSON.
+To try the update window without publishing anything, serve a JSON file shaped like GitHub's answer on this
+computer and start the editor with `--check-updates --update-url http://127.0.0.1:8000/latest.json`. Only a server
+at `127.0.0.1`, `localhost` or `[::1]` may use plain `http` and serve its own downloads; any other `--update-url` must
+use `https`, and downloads still come only from this repository's releases.
+[`source/Tests/update_tests/UpdateTests.cpp`](../source/Tests/update_tests/UpdateTests.cpp) has an example of the JSON.
+
+### What the SHA-256 check proves
+
+The editor checks a downloaded setup against the SHA-256 published with the same GitHub release. That catches a
+damaged, truncated or swapped download, but it can't tell a release made by this workflow from one made by someone
+who got write access to the repository: whoever can publish a release can publish its checksum too. The setup isn't
+code-signed (no Authenticode certificate yet), so nothing else vouches for it either, and Windows SmartScreen may warn
+about it. What protects users is who can publish: keep write access to the repository small, restrict who can push
+`v*` tags, and consider the `release` environment approval below. Signing the setup and having the editor check the
+signature before it runs it would close this gap.
 
 ## Repository settings
 
 Set once by a repository administrator (the workflow can't change them):
 
 - **The `release` branch ruleset.** The *version release* ruleset covers `release` (and `alpha`, `beta`, `stable`) with
-  creation, update, deletion and force-push rules and signed commits required, and lists no bypass actors, so as it
-  stands nobody can create or update `release`. Before the first release, add a bypass for the maintainers (Repository
-  admin role; "pull requests only" keeps every change going through a pull request), then create `release` from `dev`.
-  With signed commits required, merge pull requests with a merge or squash commit made on GitHub (GitHub signs those).
+  creation, update, deletion and force-push rules and signed commits required. Without a bypass nobody can create or
+  update `release`; since 2026-11-27 the **Repository admin** role bypasses it (mode *Always*), so maintainers can
+  create `release` from `dev` and merge into it, and everyone else is still blocked. *Always* is needed to create the
+  branch (a push, not a pull request); once `release` exists you can switch the bypass to *For pull requests only*, so
+  even admins change it only by merging a pull request. With signed commits required, merge pull requests with a
+  merge or squash commit made on GitHub (GitHub signs those).
 - **Who can push release tags (recommended).** A tag ruleset on `refs/tags/v*` that restricts creation, update and
   deletion to maintainers keeps anyone else with write access from starting the workflow. The gate checks every tag
   anyway, so a stray tag can't publish, but it would still run the build.
