@@ -122,11 +122,12 @@ namespace SceneryEditorX::EditorVisibility
 					Remove(target);
 			}
 
-			/* @brief Removes the targets `remove` returns true for (called once for each). */
+			/* @brief Removes the targets `remove` returns true for (called once for each); the index is rebuilt only then. */
 			template<typename Predicate>
 			void EraseIf(Predicate remove)
 			{
-				std::erase_if(m_Targets, remove);
+				if (std::erase_if(m_Targets, remove) == 0)
+					return;
 				m_Index.clear();
 				for (size_t i = 0; i < m_Targets.size(); ++i)
 					m_Index[TargetId(m_Targets[i])] = i;

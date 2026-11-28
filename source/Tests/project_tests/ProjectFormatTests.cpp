@@ -919,6 +919,55 @@ TEST_CASE("The view's hide and lock state round trips in .edX and .sex, and stay
 	CHECK(oldBinary.view.IsEmpty());
 }
 
+TEST_CASE("A damaged view section costs only the view", "[project][edx][sex][view]")
+{
+	SceneryProject project = MakeSampleProject();
+	project.view.hidden = { "item/3f9a0c41d2b7", "entity/Terrain scenery KHVN" };
+	project.view.locked = { "row/KHVN/Group/Runway" };
+
+	SECTION(".sex: a flipped byte in the VIEW chunk")
+	{
+		const std::string bytes = WriteSex(project);
+		std::vector<SexChunkInfo> chunks;
+		REQUIRE(ReadSexChunkTable(bytes.data(), bytes.size(), chunks));
+		const auto view = std::ranges::find_if(chunks, [](const SexChunkInfo &chunk) { return chunk.tag == "VIEW"; });
+		REQUIRE(view != chunks.end());
+		std::string damaged = bytes;
+		damaged[static_cast<size_t>(view->offset + view->size / 2)] ^= 0x40;
+
+		SceneryProject read;
+		std::string error;
+		CHECK_FALSE(ParseSex(damaged.data(), damaged.size(), read, nullptr, &error));
+		CHECK_THAT(error, ContainsSubstring("VIEW is damaged"));
+
+		// Recovery mode keeps the rest, with everything shown and unlocked
+		std::vector<std::string> warnings;
+		SexReadOptions partial;
+		partial.allowPartial = true;
+		SceneryProject recovered;
+		REQUIRE(ParseSex(damaged.data(), damaged.size(), recovered, &warnings, &error, partial));
+		CHECK(recovered.view.IsEmpty());
+		CHECK(recovered.CountItems() == project.CountItems());
+		CHECK(recovered.airports.size() == project.airports.size());
+		CHECK_FALSE(warnings.empty());
+	}
+	SECTION(".edX: a View that isn't an object")
+	{
+		std::string text = WriteEdx(MakeSampleProject());
+		const size_t open = text.find('{');
+		REQUIRE(open != std::string::npos);
+		text.insert(open + 1, "\"View\": 42,");
+
+		SceneryProject read;
+		std::vector<std::string> warnings;
+		std::string error;
+		REQUIRE(ParseEdx(text, read, &warnings, &error));
+		CHECK(read.view.IsEmpty());
+		CHECK(std::ranges::any_of(warnings, [](const std::string &warning) { return warning.find("View") != std::string::npos; }));
+		CHECK(read.CountItems() == MakeSampleProject().CountItems());
+	}
+}
+
 TEST_CASE(".sex detects damage instead of loading garbage", "[project][sex]")
 {
 	const std::string bytes = WriteSex(MakeSampleProject());
