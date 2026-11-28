@@ -137,6 +137,13 @@ namespace SceneryEditorX::Update
 	bool IsLoopbackUrl(std::string_view url);
 
 	/**
+	 * @brief Whether a request may be redirected to a URL: https to GitHub (github.com, api.github.com) or its file hosts
+	 * (any *.githubusercontent.com, where release files are served from; the whole domain, so a renamed file host keeps
+	 * working). With a test server (testServer), its own loopback address too. Downloads are checked by SHA-256 as well.
+	 */
+	bool IsAllowedRedirect(std::string_view url, bool testServer);
+
+	/**
 	 * @brief Whether the automatic check is due: never checked (lastCheck 0), the clock went back past the last
 	 * check, or interval seconds have passed since it.
 	 */
@@ -145,7 +152,7 @@ namespace SceneryEditorX::Update
 	/* @brief What the newest release means for the running editor. */
 	enum class Offer : std::uint8_t
 	{
-		None,		// Not newer than the running version (or a draft)
+		None,		// Not newer than the running version, or a draft or pre-release
 		Newer,		// Newer: offer it
 		Skipped		// Newer, but the user chose to skip this version (offered again by a check from the Help menu)
 	};

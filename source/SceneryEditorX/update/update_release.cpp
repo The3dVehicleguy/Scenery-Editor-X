@@ -379,6 +379,21 @@ namespace SceneryEditorX::Update
 		return host == "127.0.0.1" || EqualsNoCase(host, "localhost") || host == "[::1]";
 	}
 
+	bool IsAllowedRedirect(const std::string_view url, const bool testServer)
+	{
+		if (testServer && IsLoopbackUrl(url))
+			return true;
+		if (!StartsWithNoCase(url, "https://"))
+			return false;
+		const std::string_view rest = url.substr(8);
+		const std::string_view authority = rest.substr(0, rest.find_first_of("/?#"));
+		if (authority.empty() || authority.find_first_of("@ \\") != std::string_view::npos)
+			return false;
+		const std::string host = ToLower(authority.substr(0, authority.find(':')));
+		constexpr std::string_view FILE_HOSTS = ".githubusercontent.com";
+		return host == "github.com" || host == "api.github.com" || (host.size() > FILE_HOSTS.size() && host.ends_with(FILE_HOSTS));
+	}
+
 	bool IsCheckDue(const std::int64_t lastCheck, const std::int64_t now, const std::int64_t interval)
 	{
 		if (lastCheck <= 0 || now < lastCheck)
@@ -388,7 +403,8 @@ namespace SceneryEditorX::Update
 
 	Offer Evaluate(const Version &running, const Release &latest, const std::string_view skippedVersion)
 	{
-		if (latest.draft || latest.version <= running)
+		// /releases/latest never returns drafts or pre-releases; checked anyway, so another source can't offer them
+		if (latest.draft || latest.prerelease || latest.version <= running)
 			return Offer::None;
 		if (const std::optional<Version> skipped = ParseVersion(skippedVersion); skipped && *skipped == latest.version)
 			return Offer::Skipped;

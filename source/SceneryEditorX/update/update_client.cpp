@@ -174,6 +174,45 @@ namespace SceneryEditorX::Update
 			return transfer->sink(data, bytes) ? bytes : 0;
 		}
 
+		/* @brief Where a redirect may go (IsAllowedRedirect); filled with the refused target when it may not. */
+		struct RedirectCheck
+		{
+			bool testServer = false;
+			std::string refused;
+		};
+
+		/**
+		 * @brief Reads each response header and stops the transfer at a Location header that leads off GitHub, before
+		 * curl follows it. A relative Location stays on the same host.
+		 */
+		std::size_t CheckHeader(char *data, const std::size_t size, const std::size_t count, void *userdata)
+		{
+			RedirectCheck *check = static_cast<RedirectCheck *>(userdata);
+			const std::size_t bytes = size * count;
+			std::string_view line(data, bytes);
+			constexpr std::string_view NAME = "location:";
+			if (line.size() <= NAME.size())
+				return bytes;
+			for (std::size_t i = 0; i < NAME.size(); ++i)
+			{
+				const char c = line[i] >= 'A' && line[i] <= 'Z' ? static_cast<char>(line[i] - 'A' + 'a') : line[i];
+				if (c != NAME[i])
+					return bytes;
+			}
+			std::string_view target = line.substr(NAME.size());
+			while (!target.empty() && (target.front() == ' ' || target.front() == '\t'))
+				target.remove_prefix(1);
+			while (!target.empty() && (target.back() == '\r' || target.back() == '\n' || target.back() == ' ' || target.back() == '\t'))
+				target.remove_suffix(1);
+			if (target.empty() || (target.front() == '/' && !target.starts_with("//")))
+				return bytes;	// Relative: the same host
+			const std::string absolute = target.starts_with("//") ? "https:" + std::string(target) : std::string(target);
+			if (IsAllowedRedirect(absolute, check->testServer))
+				return bytes;
+			check->refused = absolute;
+			return 0;	// Stops the transfer (CURLE_WRITE_ERROR) before the redirect is followed
+		}
+
 		int Progress(void *userdata, const curl_off_t downloadTotal, const curl_off_t downloadNow, curl_off_t, curl_off_t)
 		{
 			const Transfer *transfer = static_cast<const Transfer *>(userdata);
@@ -231,6 +270,10 @@ namespace SceneryEditorX::Update
 			if (transfer.timeoutSeconds > 0)
 				curl_easy_setopt(curl, CURLOPT_TIMEOUT, transfer.timeoutSeconds);
 			curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+			RedirectCheck redirectCheck;
+			redirectCheck.testServer = testServer;
+			curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, CheckHeader);
+			curl_easy_setopt(curl, CURLOPT_HEADERDATA, &redirectCheck);
 			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteData);
 			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &transfer);
 			curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, Progress);
@@ -246,6 +289,8 @@ namespace SceneryEditorX::Update
 			result.tooLarge = transfer.tooLarge;
 			if (code == CURLE_ABORTED_BY_CALLBACK)
 				result.cancelled = true;
+			else if (!redirectCheck.refused.empty())
+				result.error = "redirected away from GitHub, to " + redirectCheck.refused;
 			else if (transfer.tooLarge)
 				result.error = "the answer was larger than expected";
 			else if (code != CURLE_OK)

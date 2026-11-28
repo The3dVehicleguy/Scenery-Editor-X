@@ -316,6 +316,33 @@ TEST_CASE("Only a newer release is offered, unless it was skipped", "[update][of
 
 	latest.draft = true;
 	CHECK(Evaluate(running, latest, "") == Offer::None);
+	latest.draft = false;
+	latest.prerelease = true;
+	CHECK(Evaluate(running, latest, "") == Offer::None);			// Pre-releases are never offered
+}
+
+TEST_CASE("Requests are only redirected to GitHub", "[update][url]")
+{
+	for (const char *ok : { "https://github.com/x/y/releases/download/v1/a.exe", "https://api.github.com/repos/x/y/releases/latest",
+		"https://objects.githubusercontent.com/github-production-release-asset/1/2?x=1", "https://release-assets.githubusercontent.com/a",
+		"HTTPS://Release-Assets.GitHubUserContent.com:443/a", "https://raw.githubusercontent.com/x" })
+	{
+		INFO(ok);
+		CHECK(IsAllowedRedirect(ok, false));
+		CHECK(IsAllowedRedirect(ok, true));
+	}
+	for (const char *bad : { "http://github.com/a", "http://objects.githubusercontent.com/a", "https://githubusercontent.com/a",
+		"https://evilgithubusercontent.com/a", "https://githubusercontent.com.evil.example/a", "https://github.com.evil.example/a",
+		"https://gist.github.com/a", "https://github.com@evil.example/a", "https://example.com/a", "ftp://github.com/a", "", "https://",
+		"https://objects.githubusercontent.com\\@evil.example/a" })
+	{
+		INFO(bad);
+		CHECK_FALSE(IsAllowedRedirect(bad, false));
+	}
+	// A test server may redirect within itself (curl allows https redirects only, so http here never follows)
+	CHECK(IsAllowedRedirect("http://127.0.0.1:8765/files/a.exe", true));
+	CHECK_FALSE(IsAllowedRedirect("http://127.0.0.1:8765/files/a.exe", false));
+	CHECK_FALSE(IsAllowedRedirect("https://example.com/a", true));
 }
 
 TEST_CASE("Release notes lose their Markdown markup", "[update][notes]")
