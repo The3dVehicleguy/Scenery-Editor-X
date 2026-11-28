@@ -640,7 +640,8 @@ namespace SceneryEditorX
 		stack.clear();
 		stack.emplace_back(root, parentHidden);
 		constexpr size_t LIMIT = 4'000'000; // guards against relationship cycles
-		for (size_t visited = 0; !stack.empty() && visited < LIMIT; ++visited)
+		size_t visited = 0;
+		for (; !stack.empty() && visited < LIMIT; ++visited)
 		{
 			const auto [handle, inherited] = stack.back();
 			stack.pop_back();
@@ -665,6 +666,10 @@ namespace SceneryEditorX
 				}
 			}
 		}
+		// Only a relationship cycle (an entity below itself) gets here with work left: say so instead of stopping quietly
+		if (!stack.empty())
+			SEDX_CORE_WARN_TAG("Scene", "Hidden state not passed on below entity {}: its children loop back to it (a relationship cycle)",
+				static_cast<uint32_t>(root));
 	}
 
 	void Scene::ParentChanged(const entt::entity child)

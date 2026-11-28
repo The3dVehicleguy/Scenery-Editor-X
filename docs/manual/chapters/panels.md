@@ -32,6 +32,8 @@ See [Selecting, transforming and undo](selecting-and-editing.md#the-properties-p
 
 Every entity in the scene as a tree: the airport's elements, the project's scenery, placed objects and their parts. Click to select. The **+** button adds an **Empty Entity**. The viewport camera belongs to the editor, not to the scene, so it isn't listed and can't be deleted.
 
+Left of each row are an eye and a lock. Click the eye to hide the row in the view, or the lock to lock it; drag down either column to set every row the drag crosses, as one undo step. A hidden or locked row covers everything below it, and their icons show dimmed. Right-click a row to hide or show it, isolate it or lock it. See [Hiding, isolating and locking](selecting-and-editing.md#hiding-isolating-and-locking).
+
 ## PROJECT
 
 The open project:
@@ -41,7 +43,7 @@ The open project:
 | Toolbar | New, Save, Save As…, Export, Close, Reveal |
 | **PROJECT** | Kind, author, description, target X-Plane version, pack folder, datum and elevation, created and edited dates |
 | **AIRPORTS** | The project's airports; **New airport**, **From apt.dat** |
-| **HIERARCHY** | Every item the project places; right-click to hide, lock or remove |
+| **HIERARCHY** | Every item the project places; right-click to hide, lock, exclude from export or remove |
 | **LIBRARIES** | The X-Plane libraries the project uses; **Find Used Libraries** |
 | **LIBRARY** | The project's own `library.txt` exports; **Add Files…**, **Add Export**, **Export library.txt…** |
 | **VALIDATION** | Problems X-Plane may reject |

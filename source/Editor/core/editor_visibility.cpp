@@ -207,7 +207,11 @@ namespace SceneryEditorX::EditorVisibility
 		{
 			s.dirty = true;
 			++s.revision;
-			// Keys of entities no longer hidden or locked go (the cache would grow with every entity ever toggled)
+		}
+
+		/* @brief Forgets the keys of entities no longer hidden or locked (the cache would grow with every entity ever toggled). */
+		void PruneEntityKeys(State &s)
+		{
 			std::erase_if(s.entityKeys, [&s](const auto &entry)
 			{
 				const Target target = Target::ForEntity(entry.first);
@@ -1349,7 +1353,10 @@ namespace SceneryEditorX::EditorVisibility
 		if (!stateChanged && !structureChanged)
 			return;
 		if (stateChanged)
+		{
 			ApplyLockedItems(s);
+			PruneEntityKeys(s);	// Once a frame, not on every row of a drag down the OUTLINER
+		}
 		if (stateChanged || !s.hidden.empty() || s.isolating || !s.flagged.empty())
 			ApplyHidden(s);
 		if (stateChanged || !s.locked.empty() || !s.lockedItems.empty())
