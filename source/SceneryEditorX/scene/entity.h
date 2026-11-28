@@ -89,14 +89,17 @@ namespace SceneryEditorX
 
 		/**
 		 * @brief Hides or shows the entity, and with it everything below it, in the view (the editor's hide / isolate),
-		 * without touching the active flag. The renderer, the GPU scene, the lights and framing skip what is hidden. The
-		 * change reaches the per-frame passes through Scene::MarkRenderStateChanged() for the entity and each descendant.
+		 * without touching the active flag. The renderer, the GPU scene, the lights and framing skip what is hidden. Each
+		 * entity whose IsHiddenInTree() changes reaches the per-frame passes through Scene::MarkRenderStateChanged().
 		 * Main thread.
 		 * @param hidden New state.
 		 */
 		void SetHidden(bool hidden);
 
-		/* @brief Hidden itself or below a hidden parent. Costs nothing while no entity is hidden (Scene::GetHiddenEntityCount). */
+		/**
+		 * @brief Hidden itself or below a hidden parent: a flag kept on each entity (SetHidden and Scene::ParentChanged
+		 * pass it down), so reading it walks nothing.
+		 */
 		[[nodiscard]] bool IsHiddenInTree() const;
 
 		/* @brief Active and not hidden in the tree: whether the renderer draws the entity (and lights it, for a light). */
@@ -428,6 +431,7 @@ namespace SceneryEditorX
 			relationship.pParentHandle = parent.GetUUID();
 			parent.GetComponent<RelationshipComponent>().pChildren.push_back(GetUUID());
 			Scene::MarkStructureChanged();
+			Scene::ParentChanged(m_EntityHandle);
 		}
 
 	// -------------------------------------------------------
@@ -695,6 +699,7 @@ namespace SceneryEditorX
 		{
 			GetComponent<RelationshipComponent>().pParentHandle = std::move(parent);
 			Scene::MarkStructureChanged();
+			Scene::ParentChanged(m_EntityHandle);
 		}
 
 		/**
@@ -856,7 +861,8 @@ namespace SceneryEditorX
 		bool hasMatrixPrevious = false;
 
 		bool active = true; // SetActive(); read by the renderer when collecting draw calls
-		bool hidden = false; // SetHidden(): the editor's view-only hide, which children inherit (IsHiddenInTree)
+		bool hidden = false; // SetHidden(): the editor's view-only hide, which children inherit
+		bool hiddenInTree = false; // hidden, or below a hidden entity (IsHiddenInTree; kept by Scene::PropagateHidden)
 		float timeSinceLastTransform = 0.0f; // Used for editor gizmo display and other transform-related time tracking (time in seconds)
 	};
 
@@ -896,6 +902,12 @@ namespace SceneryEditorX
 	{
 		const EntityRuntime *runtime = GetRuntime();
 		return runtime && runtime->hidden;
+	}
+
+	inline bool Entity::IsHiddenInTree() const
+	{
+		const EntityRuntime *runtime = GetRuntime();
+		return runtime && runtime->hiddenInTree;
 	}
 
 	inline void Entity::SetActive(const bool active)

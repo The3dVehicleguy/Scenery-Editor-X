@@ -92,6 +92,8 @@ namespace SceneryEditorX::EditorVisibility
 			std::unordered_map<uint64_t, std::string> entityKeys;
 			bool synced = false;
 			ProjectFile::ProjectViewState syncedView;
+			std::string syncedProject;				// The open project's identity (its uuid, else its path) when synced
+			uint64_t generation = 1;				// Bumped by Load: undo steps made before refuse (another project's state)
 			uint64_t resolvedStructure = 0;		// Scene structure the waiting keys were last looked for in
 			double nextResolve = 0.0;				// Not again before (ImGui time): a lookup walks the scene's roots
 
@@ -99,10 +101,11 @@ namespace SceneryEditorX::EditorVisibility
 			NavigationKeymap commandsKeymap = NavigationKeymap::Count;
 
 			// BeginToggleGroup / EndToggleGroup: the steps made in between, pushed as one
+			enum class Verb : uint8_t { Hide, Show, Lock, Unlock };
 			struct Step
 			{
 				std::string label;
-				std::string verb;		// "Hide", "Show", "Lock", "Unlock"
+				Verb verb = Verb::Hide;
 				size_t count = 0;
 				std::function<bool()> undo;
 				std::function<bool()> redo;
@@ -297,11 +300,24 @@ namespace SceneryEditorX::EditorVisibility
 			return children;
 		}
 
+		/* @brief The scene's roots, read at most once per pass (a save, a lookup of waiting keys) and only when needed. */
+		struct RootsCache
+		{
+			std::optional<std::vector<entt::entity>> roots;
+
+			const std::vector<entt::entity> &Get(const entt::registry &registry)
+			{
+				if (!roots)
+					roots = Roots(registry);
+				return *roots;
+			}
+		};
+
 		/**
 		 * @brief "entity/Terrain scenery KHVN", "entity/Airport KHVN/Objects/traffic_cone_2#3": the names from the top of the
 		 * scene down to the entity, "#n" for the nth of siblings with that name (from 0, when n > 0). Empty when it is gone.
 		 */
-		std::string EntityKey(const uint64_t entityId)
+		std::string EntityKey(const uint64_t entityId, RootsCache &roots)
 		{
 			entt::registry *registry = EditorScene::GetRegistry();
 			entt::entity handle = EditorScene::FindHandle(entityId);
@@ -313,7 +329,8 @@ namespace SceneryEditorX::EditorVisibility
 				const std::string_view name = EditorScene::GetName(handle);
 				const entt::entity parent = ParentOf(*registry, handle);
 				uint32_t nth = 0;
-				for (const entt::entity sibling : parent != entt::null ? Children(*registry, parent) : Roots(*registry))
+				const std::vector<entt::entity> siblings = parent != entt::null ? Children(*registry, parent) : roots.Get(*registry);
+				for (const entt::entity sibling : siblings)
 				{
 					if (sibling == handle)
 						break;
@@ -365,8 +382,11 @@ namespace SceneryEditorX::EditorVisibility
 			return found != entt::null ? EditorScene::GetID(found) : 0;
 		}
 
-		/* @brief The key a target is saved under (empty when it can't be: a row with no airport open, an entity gone). */
-		std::string KeyOf(State &s, const Target &target)
+		/**
+		 * @brief The key a target is saved under (empty when it can't be: a row with no airport open). An entity's key is
+		 * worked out again while it is there (it may have been renamed or moved) and remembered for when it is gone.
+		 */
+		std::string KeyOf(State &s, const Target &target, RootsCache &roots)
 		{
 			switch (target.type)
 			{
@@ -376,12 +396,13 @@ namespace SceneryEditorX::EditorVisibility
 					return s.appliedAirport.empty() ? std::string() : RowKey(s.appliedAirport, target);
 				case TargetType::Entity:
 				{
-					if (const auto it = s.entityKeys.find(target.entity); it != s.entityKeys.end())
-						return it->second;
-					std::string key = EntityKey(target.entity);
-					if (!key.empty())
+					if (std::string key = EntityKey(target.entity, roots); !key.empty())
+					{
 						s.entityKeys[target.entity] = key;
-					return key;
+						return key;
+					}
+					const auto it = s.entityKeys.find(target.entity);
+					return it != s.entityKeys.end() ? it->second : std::string();
 				}
 			}
 			return {};
@@ -395,8 +416,7 @@ namespace SceneryEditorX::EditorVisibility
 		{
 			if (s.pendingHidden.empty() && s.pendingLocked.empty())
 				return;
-			std::vector<entt::entity> roots;
-			bool rootsRead = false;
+			RootsCache roots;
 			bool any = false;
 			const auto resolve = [&](std::vector<std::string> &pending, std::vector<Target> &targets, const bool items)
 			{
@@ -421,12 +441,7 @@ namespace SceneryEditorX::EditorVisibility
 					}
 					else if (key.starts_with(KEY_ENTITY) && EditorScene::GetRegistry())
 					{
-						if (!rootsRead)
-						{
-							roots = Roots(*EditorScene::GetRegistry());
-							rootsRead = true;
-						}
-						if (const uint64_t entity = ResolveEntityKey(key, roots))
+						if (const uint64_t entity = ResolveEntityKey(key, roots.Get(*EditorScene::GetRegistry())))
 						{
 							target = Target::ForEntity(entity);
 							s.entityKeys[entity] = key;
@@ -445,24 +460,28 @@ namespace SceneryEditorX::EditorVisibility
 				Changed(s);
 		}
 
-		/* @brief Writes the hide and lock state into the open project (its View section), marking it edited when it changed. */
-		void Save(State &s)
+		/**
+		 * @brief Writes the hide and lock state into the open project (its View section). Marks the project edited when it
+		 * changed, unless `markEdited` is false (a project just opened taking the view as it is: not a change of the user's).
+		 */
+		void Save(State &s, const bool markEdited = true)
 		{
 			ProjectFile::ProjectDocument *document = EditorProjects::GetDocument();
 			if (!document)
 				return;
+			RootsCache roots;
 			ProjectFile::ProjectViewState view;
 			for (const Target &target : s.hidden)
 			{
 				if (target.type == TargetType::ProjectItem && !document->FindItem(target.itemId))
 					continue;	// Deleted since
-				if (std::string key = KeyOf(s, target); !key.empty())
+				if (std::string key = KeyOf(s, target, roots); !key.empty())
 					view.hidden.push_back(std::move(key));
 			}
 			view.hidden.insert(view.hidden.end(), s.pendingHidden.begin(), s.pendingHidden.end());
 			for (const Target &target : s.locked)
 			{
-				if (std::string key = KeyOf(s, target); !key.empty())
+				if (std::string key = KeyOf(s, target, roots); !key.empty())
 					view.locked.push_back(std::move(key));
 			}
 			view.locked.insert(view.locked.end(), s.pendingLocked.begin(), s.pendingLocked.end());
@@ -476,11 +495,21 @@ namespace SceneryEditorX::EditorVisibility
 			if (view == document->GetProject().view)
 				return;
 			document->GetProject().view = std::move(view);
-			EditorProjects::MarkEdited(ProjectFile::ProjectDocument::Section::Info);
+			if (markEdited)
+				EditorProjects::MarkEdited(ProjectFile::ProjectDocument::Section::Info);
 		}
 
-		/* @brief Takes the hide and lock state the open project was saved with (or none); isolation ends. */
-		void Load(State &s, const ProjectFile::ProjectViewState &view, const bool synced)
+		/* @brief Hidden, locked or isolated things, or saved keys waiting for theirs. */
+		bool HasState(const State &s)
+		{
+			return !s.hidden.empty() || !s.locked.empty() || !s.pendingHidden.empty() || !s.pendingLocked.empty() || s.isolating;
+		}
+
+		/**
+		 * @brief Takes the hide and lock state the open project was saved with (or none); isolation ends, and the undo steps
+		 * made before refuse (they name another project's state).
+		 */
+		void Load(State &s, const ProjectFile::ProjectViewState &view, const bool synced, std::string project)
 		{
 			s.hidden.clear();
 			s.locked.clear();
@@ -491,6 +520,8 @@ namespace SceneryEditorX::EditorVisibility
 			s.pendingLocked = view.locked;
 			s.synced = synced;
 			s.syncedView = view;
+			s.syncedProject = std::move(project);
+			++s.generation;
 			ResolvePending(s);
 			Changed(s);
 		}
@@ -680,12 +711,46 @@ namespace SceneryEditorX::EditorVisibility
 			EditorHistory::Push({ std::move(step.label), std::move(step.undo), std::move(step.redo), step.bytes });
 		}
 
-		/* @brief "3 items" / "Runway 1". */
+		/* @brief "3 items" / "Runway 1", for the log (English, like the rest of it). */
 		std::string Count(const std::vector<Target> &targets)
 		{
 			if (targets.size() == 1)
 				return EditorSelection::Describe(targets.front());
 			return std::to_string(targets.size()) + " items";
+		}
+
+		using Verb = State::Verb;
+
+		/* @brief An undo step's label for a number of targets ("Hide 3 items"), translated. */
+		std::string Label(const Verb verb, const size_t count)
+		{
+			const std::int64_t n = static_cast<std::int64_t>(count);
+			switch (verb)
+			{
+				// TRANSLATORS: undo steps (Edit > Undo ...); {} is how many things were hidden, shown, locked or unlocked
+				case Verb::Hide:	return TrNF("Hide {} item", "Hide {} items", n);
+				case Verb::Show:	return TrNF("Show {} item", "Show {} items", n);
+				case Verb::Lock:	return TrNF("Lock {} item", "Lock {} items", n);
+				case Verb::Unlock:	return TrNF("Unlock {} item", "Unlock {} items", n);
+			}
+			return {};
+		}
+
+		/* @brief An undo step's label for these targets: the one's name ("Hide Runway 1"), else how many there are. */
+		std::string Label(const Verb verb, const std::vector<Target> &targets)
+		{
+			if (targets.size() != 1)
+				return Label(verb, targets.size());
+			const std::string name = EditorSelection::Describe(targets.front());
+			switch (verb)
+			{
+				// TRANSLATORS: undo steps (Edit > Undo ...); {} is the name of what was hidden, shown, locked or unlocked
+				case Verb::Hide:	return TrF("Hide {}", name);
+				case Verb::Show:	return TrF("Show {}", name);
+				case Verb::Lock:	return TrF("Lock {}", name);
+				case Verb::Unlock:	return TrF("Unlock {}", name);
+			}
+			return {};
 		}
 
 		/* @brief The keys shown beside a command for the chosen keymap (the keys themselves are HandleShortcuts'). */
@@ -694,7 +759,7 @@ namespace SceneryEditorX::EditorVisibility
 			const char *hideSelected = "H";
 			const char *hideUnselected = "Shift+H";
 			const char *showAll = "Alt+H";
-			const char *isolate = "Numpad /";
+			const char *isolate = "Numpad / or Alt+Q";
 		};
 
 		Keys KeysFor(const NavigationKeymap keymap)
@@ -705,7 +770,7 @@ namespace SceneryEditorX::EditorVisibility
 				keys.hideSelected = "Ctrl+H";
 				keys.hideUnselected = "Alt+H";
 				keys.showAll = "Ctrl+Shift+H";
-				keys.isolate = "Shift+I";
+				keys.isolate = "Shift+I or Alt+Q";
 			}
 			else if (keymap == NavigationKeymap::Max)
 			{
@@ -764,11 +829,12 @@ namespace SceneryEditorX::EditorVisibility
 		if (changed.empty())
 			return;
 
+		RootsCache roots;
 		for (const Target &target : changed)
 		{
 			Set(s.hidden, target, hidden);
 			if (hidden)
-				KeyOf(s, target);	// An entity's key while it is there to name
+				KeyOf(s, target, roots);	// An entity's key while it is there to name (no project open: no save does it)
 		}
 		Changed(s);
 		Save(s);
@@ -786,18 +852,21 @@ namespace SceneryEditorX::EditorVisibility
 				EditorSelection::Select(context, deselect, EditorSelection::Mode::Remove);
 		}
 
-		const std::string label = std::string(hidden ? "Hide " : "Show ") + Count(changed);
-		EDITOR_INFO_TAG(LOG_TAG, "{}", label);
-		const auto apply = [changed](const bool hide)
+		const Verb verb = hidden ? Verb::Hide : Verb::Show;
+		EDITOR_INFO_TAG(LOG_TAG, "{} {}", hidden ? "Hide" : "Show", Count(changed));
+		const auto apply = [changed, generation = s.generation](const bool hide)
 		{
+			// Not after another project opened, or this one was reverted: its targets are another state's
 			State &state = S();
+			if (state.generation != generation)
+				return false;
 			for (const Target &target : changed)
 				Set(state.hidden, target, hide);
 			Changed(state);
 			Save(state);
 			return true;
 		};
-		Record(s, { label, hidden ? "Hide" : "Show", changed.size(), [apply, hidden]() { return apply(!hidden); },
+		Record(s, { Label(verb, changed), verb, changed.size(), [apply, hidden]() { return apply(!hidden); },
 			[apply, hidden]() { return apply(hidden); }, changed.size() * sizeof(Target) });
 	}
 
@@ -939,7 +1008,7 @@ namespace SceneryEditorX::EditorVisibility
 	void SetLocked(EditorContext *, const std::vector<Target> &targets, const bool locked)
 	{
 		State &s = S();
-		const ProjectFile::ProjectDocument *document = EditorProjects::GetDocument();
+		RootsCache roots;
 		std::vector<Target> changed;
 		bool items = false;
 		for (const Target &target : targets)
@@ -959,7 +1028,7 @@ namespace SceneryEditorX::EditorVisibility
 			{
 				Set(s.locked, normalized, locked);
 				if (locked)
-					KeyOf(s, normalized);	// An entity's key while it is there to name
+					KeyOf(s, normalized, roots);	// An entity's key while it is there to name
 			}
 			changed.push_back(normalized);
 		}
@@ -970,11 +1039,15 @@ namespace SceneryEditorX::EditorVisibility
 		Changed(s);
 		Save(s);
 
-		const std::string label = std::string(locked ? "Lock " : "Unlock ") + Count(changed);
-		EDITOR_INFO_TAG(LOG_TAG, "{}", label);
-		const auto apply = [changed, document](const bool lock)
+		const Verb verb = locked ? Verb::Lock : Verb::Unlock;
+		EDITOR_INFO_TAG(LOG_TAG, "{} {}", locked ? "Lock" : "Unlock", Count(changed));
+		const auto apply = [changed, generation = s.generation](const bool lock)
 		{
+			// Only in the project (and state) it was made in: the document object is reused, so another project opened
+			// or this one reverted shows as a new generation (Load), not as another document
 			State &state = S();
+			if (state.generation != generation)
+				return false;
 			bool itemsChanged = false;
 			for (const Target &target : changed)
 			{
@@ -983,9 +1056,6 @@ namespace SceneryEditorX::EditorVisibility
 					Set(state.locked, target, lock);
 					continue;
 				}
-				// A project item: in the project it was locked in, if that is still the open one
-				if (EditorProjects::GetDocument() != document)
-					return false;
 				if (ProjectFile::SceneryItem *item = FindItem(target.itemId); item && item->locked != lock)
 				{
 					item->locked = lock;
@@ -998,7 +1068,7 @@ namespace SceneryEditorX::EditorVisibility
 			Save(state);
 			return true;
 		};
-		Record(s, { label, locked ? "Lock" : "Unlock", changed.size(), [apply, locked]() { return apply(!locked); },
+		Record(s, { Label(verb, changed), verb, changed.size(), [apply, locked]() { return apply(!locked); },
 			[apply, locked]() { return apply(locked); }, changed.size() * sizeof(Target) });
 	}
 
@@ -1057,7 +1127,9 @@ namespace SceneryEditorX::EditorVisibility
 			bytes += step.bytes;
 			sameVerb &= step.verb == steps.front().verb;
 		}
-		const std::string label = sameVerb ? steps.front().verb + " " + std::to_string(count) + " items" : "Change visibility of " + std::to_string(count) + " items";
+		// TRANSLATORS: an undo step that hid some rows and showed others, or locked some and unlocked others; {} is how many
+		const std::string label = sameVerb ? Label(steps.front().verb, count) :
+			TrNF("Change visibility of {} item", "Change visibility of {} items", static_cast<std::int64_t>(count));
 		auto shared = std::make_shared<std::vector<State::Step>>(std::move(steps));
 		EditorHistory::Push({ label,
 			[shared]()
@@ -1084,15 +1156,31 @@ namespace SceneryEditorX::EditorVisibility
 		State &s = S();
 
 		// The open project's saved state, when it isn't what was loaded or saved here last: another project opened (the
-		// document object is reused), the project reverted. Closing it takes its state away too.
+		// document object is reused: told apart by the project's identity), the project reverted. Closing it takes its state
+		// away too. A project opened while none was, saved with nothing hidden or locked (a new one, say), takes what the
+		// view shows then instead of losing it; it is written into the project without marking it edited.
 		if (const ProjectFile::ProjectDocument *document = EditorProjects::GetDocument())
 		{
-			if (!s.synced || document->GetProject().view != s.syncedView)
-				Load(s, document->GetProject().view, true);
+			const ProjectFile::SceneryProject &project = document->GetProject();
+			std::string identity = project.info.uuid;
+			if (identity.empty())
+			{
+				const std::u8string path = document->GetPath().generic_u8string();
+				identity.assign(reinterpret_cast<const char *>(path.data()), path.size());
+			}
+			if (!s.synced && project.view.IsEmpty() && HasState(s))
+			{
+				s.syncedProject = std::move(identity);
+				Save(s, false);
+			}
+			else if (!s.synced || identity != s.syncedProject || project.view != s.syncedView)
+			{
+				Load(s, project.view, true, std::move(identity));
+			}
 		}
 		else if (s.synced)
 		{
-			Load(s, {}, false);
+			Load(s, {}, false, {});
 		}
 
 		// Rows are kept by kind and index in their airport: another airport's "Runway 1" is another runway. The rows of
@@ -1101,13 +1189,14 @@ namespace SceneryEditorX::EditorVisibility
 		const std::string airportId = airport ? airport->airport.id : std::string();
 		if (airportId != s.appliedAirport)
 		{
-			const auto park = [&s](std::vector<Target> &targets, std::vector<std::string> &pending)
+			RootsCache roots;
+			const auto park = [&s, &roots](std::vector<Target> &targets, std::vector<std::string> &pending)
 			{
-				std::erase_if(targets, [&s, &pending](const Target &target)
+				std::erase_if(targets, [&s, &roots, &pending](const Target &target)
 				{
 					if (target.type != TargetType::AirportElement)
 						return false;
-					if (std::string key = KeyOf(s, target); !key.empty())
+					if (std::string key = KeyOf(s, target, roots); !key.empty())
 						pending.push_back(std::move(key));
 					return true;
 				});
@@ -1151,7 +1240,7 @@ namespace SceneryEditorX::EditorVisibility
 	void Reset()
 	{
 		State &s = S();
-		Load(s, {}, false);
+		Load(s, {}, false, {});
 	}
 
 	uint64_t GetRevision()
@@ -1207,9 +1296,9 @@ namespace SceneryEditorX::EditorVisibility
 		const bool hideSelected = ImGui::Shortcut(maya ? ImGuiMod_Ctrl | ImGuiKey_H : ImGuiKey_H, ImGuiInputFlags_RouteGlobal);
 		const bool hideUnselected = ImGui::Shortcut(maya ? ImGuiMod_Alt | ImGuiKey_H : ImGuiMod_Shift | ImGuiKey_H, ImGuiInputFlags_RouteGlobal);
 		const bool showAll = ImGui::Shortcut(maya ? ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_H : ImGuiMod_Alt | ImGuiKey_H, ImGuiInputFlags_RouteGlobal);
+		// Alt+Q in every keymap, for keyboards without a numpad (laptops)
 		bool isolate = ImGui::Shortcut(ImGuiKey_KeypadDivide, ImGuiInputFlags_RouteGlobal);
-		if (keymap == NavigationKeymap::Max)
-			isolate |= ImGui::Shortcut(ImGuiMod_Alt | ImGuiKey_Q, ImGuiInputFlags_RouteGlobal);
+		isolate |= ImGui::Shortcut(ImGuiMod_Alt | ImGuiKey_Q, ImGuiInputFlags_RouteGlobal);
 		if (maya)
 			isolate |= ImGui::Shortcut(ImGuiMod_Shift | ImGuiKey_I, ImGuiInputFlags_RouteGlobal);
 

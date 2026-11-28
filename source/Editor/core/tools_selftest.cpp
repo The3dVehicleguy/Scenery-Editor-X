@@ -870,6 +870,24 @@ namespace SceneryEditorX::ToolsSelfTest
 						EDITOR_INFO_TAG(LOG_TAG, "Hidden: {} target pixels, {} ground, {} others", hidden.target, hidden.terrain, hidden.others);
 						Check(hidden.target == 0, "visibility: a hidden target isn't drawn or picked");
 
+						// Something parented under it afterwards is hidden with it (Scene::ParentChanged); the hide reached
+						// the entities on the frame after Hide Selected (EditorVisibility::Tick)
+						std::vector<uint64_t> entities;
+						EditorSelection::CollectEntities(target, entities);
+						Entity parent = entities.empty() ? Entity() : Scene::TryGetEntityWithUUID(UUID(entities.front()));
+						Check(parent && parent.IsHiddenInTree(), "visibility: the hidden target's entities are hidden");
+						if (parent)
+						{
+							Entity child = Scene::CreateEntity("Visibility self-test child");
+							Check(child && !child.IsHiddenInTree(), "visibility: a new root entity isn't hidden");
+							if (child)
+							{
+								child.SetParent(parent);
+								Check(child.IsHiddenInTree(), "visibility: an entity parented under a hidden one is hidden too");
+								EditorScene::Destroy(EditorScene::GetID(static_cast<entt::entity>(child)));
+							}
+						}
+
 						EditorVisibility::ShowAll(context);
 						Check(!EditorVisibility::IsHidden(target), "visibility: Show All shows it again");
 						EditorHistory::Undo();

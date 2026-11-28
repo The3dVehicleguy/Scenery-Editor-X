@@ -9,13 +9,13 @@ versions.
 
 ### Added
 
-- **Hide, isolate and lock** (0.2.120.621, issue #104). Each OUTLINER row has an eye and a lock toggle on its left;
+- **Hide, isolate and lock** (0.2.120.621, issue #104; review follow-up 0.2.121.622). Each OUTLINER row has an eye and a lock toggle on its left;
   a drag down either column sets every row it crosses, as one undo step, and a hidden or locked row covers what is
   below it (shown with a dimmed icon). Hiding is view-only: hidden things aren't drawn, hovered, picked, box-selected
   or framed, and they are still exported. **Hide Selected**, **Hide Unselected** and **Show All** (<kbd>H</kbd> /
   <kbd>Shift+H</kbd> / <kbd>Alt+H</kbd>; in the Maya keymap <kbd>Ctrl+H</kbd> / <kbd>Alt+H</kbd> /
-  <kbd>Ctrl+Shift+H</kbd>) and **Isolate Selection** (<kbd>Numpad /</kbd>, also <kbd>Alt+Q</kbd> in the 3ds Max
-  keymap and <kbd>Shift+I</kbd> in the Maya keymap) are in the **Edit** and **Scene** menus, the quad menu's
+  <kbd>Ctrl+Shift+H</kbd>) and **Isolate Selection** (<kbd>Numpad /</kbd> or <kbd>Alt+Q</kbd> in every keymap, so
+  keyboards without a numpad have one too, and <kbd>Shift+I</kbd> in the Maya keymap) are in the **Edit** and **Scene** menus, the quad menu's
   DISPLAY panel and the OUTLINER's row menu. Isolating shows only the selection, the base terrain under it and the
   scene's lights, with a notice at the top of the viewport; ending it brings back what was shown before. Locked things
   are drawn, but the viewport doesn't hover, pick or box-select them, the tools don't move, edit or delete them, and
@@ -24,10 +24,12 @@ versions.
   hidden items), is now **Exclude from Export**. What is hidden and locked is saved with the project (a `View`
   section in `.edX`, a `VIEW` chunk in `.sex`; isolation isn't saved), so it opens the way it was left: project items
   by id, apt.dat rows by airport, kind and index, anything else by the names on its path in the scene; another
-  airport's rows and entities still loading wait until they are there. For developers: `Entity::SetHidden` /
-  `IsHiddenInTree` / `IsDrawn` (a view-only flag apart from the LOD / `ANIM_hide` active flag, which the renderer,
-  GPU scene, lights and framing read), `ProjectFile::ProjectViewState` (covered in `ProjectFormatTests`) and
-  `Editor/core/editor_visibility.*`.
+  airport's rows and entities still loading wait until they are there. A project opened with nothing hidden or locked
+  (a new one) keeps what the view hides when it opens; undoing a hide or lock made in another project does nothing.
+  For developers: `Entity::SetHidden` / `IsHiddenInTree` / `IsDrawn` (a view-only flag apart from the LOD /
+  `ANIM_hide` active flag, kept on each entity and passed down to children, also when one is parented later:
+  `Scene::ParentChanged`; the renderer, GPU scene, lights and framing read it), `ProjectFile::ProjectViewState`
+  (covered in `ProjectFormatTests`) and `Editor/core/editor_visibility.*`.
 
 - **Project Hub** (0.2.113.614). The editor starts on a window for choosing what to work on (after the first-launch
   keymap question; **File › Project Hub…** or <kbd>Ctrl+Shift+O</kbd> brings it back, and **Show at startup** turns

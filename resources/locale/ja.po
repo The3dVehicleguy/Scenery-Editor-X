@@ -332,8 +332,27 @@ msgid "Search"
 msgstr "検索"
 
 #: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Change visibility of {} item"
+msgid_plural "Change visibility of {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
 msgid "Exit"
 msgstr ""
+
+#. undo steps (Edit > Undo ...); {} is the name of what was hidden, shown, locked or unlocked
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Hide {}"
+msgstr ""
+
+#. undo steps (Edit > Undo ...); {} is how many things were hidden, shown, locked or unlocked
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Hide {} item"
+msgid_plural "Hide {} items"
+msgstr[0] ""
 
 #: source/Editor/core/editor_visibility.cpp
 #, python-brace-format
@@ -343,8 +362,41 @@ msgstr[0] ""
 
 #: source/Editor/core/editor_visibility.cpp
 #, python-brace-format
+msgid "Lock {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Lock {} item"
+msgid_plural "Lock {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
 msgid "Show everything again ({})"
 msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show {} item"
+msgid_plural "Show {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Unlock {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Unlock {} item"
+msgid_plural "Unlock {} items"
+msgstr[0] ""
 
 #: source/Editor/core/editor_welcome.cpp
 msgid "Action"
