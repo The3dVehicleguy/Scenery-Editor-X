@@ -9,7 +9,7 @@ versions.
 
 ### Added
 
-- **Update check and release pipeline** (0.2.128.629). A few seconds after it starts, at most once a day, the editor
+- **Update check and release pipeline** (0.2.128.629; review follow-up 0.2.129.630: a 404 from GitHub keeps an update found before, the client's thread is joined at exit). A few seconds after it starts, at most once a day, the editor
   asks GitHub whether a newer release of Scenery Editor X is out (**Edit › Preferences… › Updates** turns that off;
   **Help › Check for Updates…** and the About box ask at any time). When one is, the **Software Update** window opens
   once the startup windows are closed, with the release notes: on Windows, **Download and Install** downloads the

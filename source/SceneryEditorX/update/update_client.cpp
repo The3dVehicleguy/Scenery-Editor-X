@@ -74,20 +74,29 @@ namespace SceneryEditorX::Update
 			ClientOptions options;
 			std::string expectedSha256;	// Of status.installer, checked again just before it runs
 
-			std::thread worker;
+			std::mutex workerMutex;		// Guards worker: started, joined and replaced by StartWork, Shutdown, the destructor
+			std::thread worker;			// Never takes workerMutex itself
 			std::atomic<bool> busy{ false };
 			std::atomic<bool> cancel{ false };
 			std::atomic<std::uint64_t> downloaded{ 0 };
 			std::atomic<std::uint64_t> total{ 0 };
-			bool initialized = false;
-			bool curlReady = false;
+			std::atomic<bool> initialized{ false };
+			std::atomic<bool> curlReady{ false };
 
 			~ClientState()
 			{
-				// Shutdown() joins the worker; if the process exits without it, a joinable thread must not terminate it
+				// Shutdown() has normally joined the worker. If the process exits without it, stop the worker and wait for
+				// it (the progress callback aborts a transfer at once): a detached one would go on using this state while
+				// static destruction frees it.
 				cancel.store(true);
+				std::scoped_lock lock(workerMutex);
 				if (worker.joinable())
-					worker.detach();
+				{
+					if (worker.get_id() != std::this_thread::get_id())
+						worker.join();
+					else
+						worker.detach();	// The worker itself is ending the process: it can't wait for itself
+				}
 			}
 		};
 
@@ -324,8 +333,9 @@ namespace SceneryEditorX::Update
 		bool StartWork(const std::function<void()> &begin, std::function<void()> work)
 		{
 			ClientState &s = S();
-			if (!s.initialized || s.busy.exchange(true))
+			if (!s.initialized.load() || s.busy.exchange(true))
 				return false;
+			std::scoped_lock lock(s.workerMutex);
 			if (s.worker.joinable())
 				s.worker.join();	// The last piece of work has finished: it cleared busy as its very last step
 			s.cancel.store(false);
@@ -384,19 +394,39 @@ namespace SceneryEditorX::Update
 			}
 			if (result.transferred && result.status == 404)
 			{
-				// No release has been published yet
-				WriteCachedCheck(now, nullptr);
+				// Usually no release has been published yet. A renamed or private repository (or a wrong --update-url)
+				// answers 404 too, so a release found before is kept, like after any failed check, and neither the cache
+				// nor its check time changes: the next start asks again. The cache counts too (a check from the Help menu
+				// with automatic checks off hasn't read it).
+				const std::optional<CachedCheck> cached = ReadCachedCheck();
+				bool keptRelease = false;
 				ChangeStatus([&](Status &status)
 				{
+					if (!status.release && cached && cached->release)
+					{
+						ApplyRelease(status, *cached->release, manual, true, skipped);
+						status.checkedAt = cached->checkedAt;
+					}
+					keptRelease = status.release.has_value();
+					if (keptRelease)
+					{
+						CheckFailed(status, manual, "GitHub has no newest release at " + url + " (HTTP 404)");
+						return;
+					}
 					status.state = State::UpToDate;
 					status.offer = Offer::None;
-					status.release.reset();
 					status.manual = manual;
 					status.fromCache = false;
 					status.checkedAt = now;
 					status.error.clear();
 				});
-				SEDX_CORE_INFO_TAG(LOG_TAG, "No release has been published yet ({})", url);
+				if (keptRelease)
+					SEDX_CORE_WARN_TAG(LOG_TAG, "GitHub answered HTTP 404 for {}: keeping the release found before", url);
+				else
+				{
+					WriteCachedCheck(now, nullptr);
+					SEDX_CORE_INFO_TAG(LOG_TAG, "No release has been published yet ({})", url);
+				}
 				return;
 			}
 			if (!ok)
@@ -425,9 +455,13 @@ namespace SceneryEditorX::Update
 			});
 		}
 
-		/* @brief The SHA-256 the release publishes for a file: GitHub's digest, else <file>.sha256, else SHA256SUMS.txt. */
-		std::string ExpectedSha256(const Release &release, const ReleaseAsset &file, const bool testServer, std::string &error)
+		/**
+		 * @brief The SHA-256 the release publishes for a file: GitHub's digest, else <file>.sha256, else SHA256SUMS.txt.
+		 * Empty when there is none (error says why) or the download was cancelled while a listing was read (cancelled).
+		 */
+		std::string ExpectedSha256(const Release &release, const ReleaseAsset &file, const bool testServer, std::string &error, bool &cancelled)
 		{
+			cancelled = false;
 			if (!file.sha256.empty())
 				return file.sha256;
 
@@ -444,7 +478,7 @@ namespace SceneryEditorX::Update
 				{
 					if (result.cancelled)
 					{
-						error = "Cancelled";
+						cancelled = true;
 						return {};
 					}
 					continue;
@@ -489,10 +523,11 @@ namespace SceneryEditorX::Update
 			}
 
 			std::string error;
-			const std::string expected = ExpectedSha256(release, installer, testServer, error);
+			bool stopped = false;
+			const std::string expected = ExpectedSha256(release, installer, testServer, error, stopped);
 			if (expected.empty())
 			{
-				if (error == "Cancelled")
+				if (stopped)
 					cancelled();
 				else
 					fail(error);
@@ -614,35 +649,33 @@ namespace SceneryEditorX::Update
 	void UpdateClient::Init(const ClientOptions &options)
 	{
 		ClientState &s = S();
+		if (s.initialized.load())
+			return;
 		{
 			std::scoped_lock lock(s.mutex);
-			if (s.initialized)
-				return;
-			s.initialized = true;
 			s.options = options;
 		}
-		s.curlReady = curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK;	// Reference counted: the Gateway client shares it
+		s.curlReady.store(curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK);	// Reference counted: the Gateway client shares it
 		RemoveOldDownloads();
 		if (options.testServer)
 			SEDX_CORE_WARN_TAG(LOG_TAG, "Update checks use a test server: {}", options.latestReleaseUrl);
+		s.initialized.store(true);	// Last: nothing starts before libcurl is ready
 	}
 
 	void UpdateClient::Shutdown()
 	{
 		ClientState &s = S();
-		{
-			std::scoped_lock lock(s.mutex);
-			if (!s.initialized)
-				return;
-			s.initialized = false;
-		}
+		if (!s.initialized.exchange(false))
+			return;
 		s.cancel.store(true);
-		if (s.worker.joinable())
-			s.worker.join();
+		{
+			std::scoped_lock lock(s.workerMutex);
+			if (s.worker.joinable())
+				s.worker.join();
+		}
 		s.busy.store(false);
-		if (s.curlReady)
+		if (s.curlReady.exchange(false))
 			curl_global_cleanup();
-		s.curlReady = false;
 	}
 
 	Version UpdateClient::RunningVersion()
@@ -668,7 +701,7 @@ namespace SceneryEditorX::Update
 	bool UpdateClient::CheckIfDue()
 	{
 		ClientState &s = S();
-		if (!s.initialized || s.busy.load())
+		if (!s.initialized.load() || s.busy.load())
 			return false;
 
 		std::string skipped;
