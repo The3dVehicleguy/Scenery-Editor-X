@@ -376,7 +376,8 @@ namespace SceneryEditorX::Update
 		}
 		else if (const size_t colon = host.find(':'); colon != std::string_view::npos)
 			host = host.substr(0, colon);
-		return host == "127.0.0.1" || EqualsNoCase(host, "localhost") || host == "[::1]";
+		// Addresses only: "localhost" is a name, which the hosts file (or an older libcurl's resolver) may point elsewhere
+		return host == "127.0.0.1" || host == "[::1]";
 	}
 
 	bool IsAllowedRedirect(const std::string_view url, const bool testServer)

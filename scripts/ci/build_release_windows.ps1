@@ -36,7 +36,7 @@
     checkout path). Default: vcpkg's own.
 
 .PARAMETER VcpkgInstalledDir
-    Where the vcpkg ports are installed. Default: <BuildDir>cpkg_installed. A worktree can point at the main
+    Where the vcpkg ports are installed. Default: <BuildDir>\vcpkg_installed. A worktree can point at the main
     checkout's (with -SkipVcpkg) instead of building the ports again.
 
 .PARAMETER VcpkgOnly
@@ -114,6 +114,13 @@ if (-not $SkipBuild -and -not $SkipVcpkg) {
 # The vcpkg ports don't need the Vulkan SDK (-VcpkgOnly runs without it); the editor and its setup do
 if (-not $env:VULKAN_SDK -or -not (Test-Path $env:VULKAN_SDK)) { throw 'VULKAN_SDK is not set to an installed Vulkan SDK.' }
 if (-not (Test-Path (Join-Path $env:VULKAN_SDK 'Lib\slang.lib'))) { throw "The Vulkan SDK at $env:VULKAN_SDK has no Lib\slang.lib (the editor links Slang)." }
+# Optional SDK components the editor compiles against (GLM, Volk, Vulkan Memory Allocator): an SDK installed with only
+# its defaults fails much later, at the first source that includes one
+foreach ($header in 'glm\glm.hpp', 'Volk\volk.h', 'vma\vk_mem_alloc.h') {
+    if (-not (Test-Path (Join-Path $env:VULKAN_SDK "Include\$header"))) {
+        throw "The Vulkan SDK at $env:VULKAN_SDK has no Include\${header}: install its GLM, Volk and Vulkan Memory Allocator components (the SDK's maintenance tool, or the installer's ``install com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma``)."
+    }
+}
 Write-Host "    Vulkan SDK $env:VULKAN_SDK"
 
 if (-not $SkipBuild) {

@@ -23,7 +23,8 @@ Scenery Editor X is a editor tool for use in creating, modifying, and building c
 Inorder to compile and develop Scenery Editor X you will need:
 
 * [CMake](https://cmake.org/download/)
-* [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows)
+* [Vulkan SDK](https://vulkan.lunarg.com/sdk/home#windows), with its optional GLM, Volk and Vulkan Memory Allocator
+  components (the editor compiles against their headers)
 
 ## Environment Variables
 

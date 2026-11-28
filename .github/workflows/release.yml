@@ -35,6 +35,8 @@ env:
   RELEASE_BRANCH: release
   INSTALLER_CHANNEL: Alpha
   VULKAN_SDK_VERSION: 1.4.350.0
+  # The SDK's optional headers the editor compiles against, besides its default components
+  VULKAN_SDK_COMPONENTS: com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma
 
 jobs:
   gate:
@@ -109,14 +111,14 @@ jobs:
           git -c 'url.https://github.com/.insteadOf=git@github.com:'
           submodule update --init --recursive --depth 1 --jobs 4
 
-      # Restored and saved as separate steps (here and for vcpkg below), so what a long first run installed is kept
-      # even when a later step fails
+      # Restored and saved as separate steps, so what a long first run installed is kept even when a later step fails.
+      # The key names the components: a change to them installs the SDK again instead of restoring one without them.
       - name: Vulkan SDK (cached)
         id: vulkan-cache
         uses: actions/cache/restore@v6
         with:
           path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
-          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}-glm-volk-vma
 
       - name: Install the Vulkan SDK
         if: steps.vulkan-cache.outputs.cache-hit != 'true'
@@ -124,16 +126,21 @@ jobs:
           $installer = Join-Path $env:RUNNER_TEMP 'vulkan_sdk.exe'
           Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/vulkan_sdk.exe" -OutFile $installer
           $root = "C:\VulkanSDK\$env:VULKAN_SDK_VERSION"
-          $process = Start-Process $installer -ArgumentList '--root', $root, '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait -PassThru
+          $arguments = @('--root', $root, '--accept-licenses', '--default-answer', '--confirm-command', 'install') + ($env:VULKAN_SDK_COMPONENTS -split ' ')
+          $process = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "The Vulkan SDK installer failed (exit code $($process.ExitCode))." }
           if (-not (Test-Path "$root\Lib\slang.lib")) { throw "The Vulkan SDK at $root has no Lib\slang.lib." }
+          # Checked before the cache step keeps it: an SDK without its components is never saved under this key
+          foreach ($header in 'glm\glm.hpp', 'Volk\volk.h', 'vma\vk_mem_alloc.h') {
+            if (-not (Test-Path "$root\Include\$header")) { throw "The Vulkan SDK at $root has no Include\$header ($env:VULKAN_SDK_COMPONENTS)." }
+          }
 
       - name: Keep the Vulkan SDK
         if: steps.vulkan-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
-          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}-glm-volk-vma
 
       # The installer itself isn't signed, but every file the setup ships from the SDK is (the Slang DLLs and the
       # Vulkan Runtime installer): checked on every run, a cached SDK included, so nothing unsigned is packaged

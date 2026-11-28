@@ -82,7 +82,8 @@ installer as a workflow artifact for two weeks. So does **Actions â€º Release â€
 workflow is on the default branch. Test a pipeline change that way before tagging.
 
 The Windows job runs [`scripts/ci/build_release_windows.ps1`](../scripts/ci/build_release_windows.ps1), which works the
-same on a developer machine (Visual Studio, CMake, NSIS, the Vulkan SDK with `VULKAN_SDK` set):
+same on a developer machine (Visual Studio, CMake, NSIS, the Vulkan SDK with `VULKAN_SDK` set and its GLM, Volk and
+Vulkan Memory Allocator components installed):
 `pwsh scripts\ci\build_release_windows.ps1` builds `build\` and leaves the setup in `build\installer\`.
 
 ## Prebuilt vcpkg packages
@@ -125,8 +126,8 @@ The update check ([`source/SceneryEditorX/update/`](../source/SceneryEditorX/upd
 
 To try the update window without publishing anything, serve a JSON file shaped like GitHub's answer on this
 computer and start the editor with `--check-updates --update-url http://127.0.0.1:8000/latest.json`. Only a server
-at `127.0.0.1`, `localhost` or `[::1]` may use plain `http` and serve its own downloads; any other `--update-url` must
-use `https`, and downloads still come only from this repository's releases.
+at `127.0.0.1` or `[::1]` (addresses: not `localhost`, which the hosts file decides) may use plain `http` and serve its
+own downloads; any other `--update-url` must use `https`, and downloads still come only from this repository's releases.
 [`source/Tests/update_tests/UpdateTests.cpp`](../source/Tests/update_tests/UpdateTests.cpp) has an example of the JSON.
 
 ### What the SHA-256 check proves

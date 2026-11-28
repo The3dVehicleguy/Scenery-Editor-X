@@ -271,8 +271,8 @@ TEST_CASE("Setup file names give their version", "[update][release]")
 
 TEST_CASE("Only servers on this computer are test servers", "[update][url]")
 {
-	for (const char *local : { "http://127.0.0.1:8765/latest.json", "http://127.0.0.1/x", "https://127.0.0.1", "http://localhost:8000/a.json",
-		"HTTP://LocalHost/a", "http://[::1]:9000/latest.json", "http://[::1]", "http://127.0.0.1?x=1", "http://localhost#frag" })
+	for (const char *local : { "http://127.0.0.1:8765/latest.json", "http://127.0.0.1/x", "https://127.0.0.1", "HTTP://127.0.0.1:80/a",
+		"http://[::1]:9000/latest.json", "http://[::1]", "http://127.0.0.1?x=1", "http://[::1]#frag" })
 	{
 		INFO(local);
 		CHECK(IsLoopbackUrl(local));
@@ -280,7 +280,9 @@ TEST_CASE("Only servers on this computer are test servers", "[update][url]")
 	for (const char *remote : { "http://example.com/latest.json", "https://api.github.com/repos/x/y/releases/latest",
 		"http://127.0.0.1@example.com/latest.json", "http://user@localhost/a", "http://localhost.example.com/a",
 		"http://127.0.0.10/a", "http://127.0.0.2/a", "http://[::1]x/a", "http://[::1", "ftp://127.0.0.1/a", "file:///C:/a.json",
-		"127.0.0.1:8765/latest.json", "", "http://", "http://127.0.0.1\\@example.com/" })
+		"127.0.0.1:8765/latest.json", "", "http://", "http://127.0.0.1\\@example.com/",
+		// Names, not addresses: the hosts file decides where they go
+		"http://localhost:8000/a.json", "HTTP://LocalHost/a", "http://localhost#frag" })
 	{
 		INFO(remote);
 		CHECK_FALSE(IsLoopbackUrl(remote));

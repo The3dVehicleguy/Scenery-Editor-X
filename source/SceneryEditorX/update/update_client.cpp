@@ -970,7 +970,7 @@ namespace SceneryEditorX::Update
 		if (accepted.testServer && !IsLoopbackUrl(accepted.latestReleaseUrl))
 		{
 			accepted.testServer = false;
-			SEDX_CORE_WARN_TAG(LOG_TAG, "{} isn't on this computer: it must use https, and only {}'s release files are downloaded",
+			SEDX_CORE_WARN_TAG(LOG_TAG, "{} isn't at 127.0.0.1 or [::1]: it must use https, and only {}'s release files are downloaded",
 				accepted.latestReleaseUrl, REPOSITORY);
 		}
 		{
