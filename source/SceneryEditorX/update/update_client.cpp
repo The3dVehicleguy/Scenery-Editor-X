@@ -34,7 +34,9 @@
 #include <fstream>
 #include <functional>
 #include <mutex>
+#include <system_error>
 #include <thread>
+#include <vector>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <resource.h>
@@ -67,12 +69,22 @@ namespace SceneryEditorX::Update
 		constexpr std::uint64_t MAX_CHECKSUM_BYTES = 64ull << 10;
 		constexpr std::uint64_t MAX_INSTALLER_BYTES = 2ull << 30;	// When the release doesn't give the size
 
+		/* @brief Closes a lock HashAndLock returned (Windows; nothing elsewhere) and clears it. */
+		void CloseInstallerLock(void *&lock)
+		{
+#if defined(_WIN32)
+			if (lock)
+				CloseHandle(static_cast<HANDLE>(lock));
+#endif
+			lock = nullptr;
+		}
+
 		struct ClientState
 		{
-			std::mutex mutex;			// Guards status, options and expectedSha256
+			std::mutex mutex;			// Guards status, options and installerLock
 			Status status;
 			ClientOptions options;
-			std::string expectedSha256;	// Of status.installer, checked again just before it runs
+			void *installerLock = nullptr;	// Windows: the handle keeping status.installer unchanged from its check until it runs
 
 			std::mutex workerMutex;		// Guards worker: started, joined and replaced by StartWork, Shutdown, the destructor
 			std::thread worker;			// Never takes workerMutex itself
@@ -97,6 +109,7 @@ namespace SceneryEditorX::Update
 					else
 						worker.detach();	// The worker itself is ending the process: it can't wait for itself
 				}
+				CloseInstallerLock(installerLock);
 			}
 		};
 
@@ -336,15 +349,41 @@ namespace SceneryEditorX::Update
 			if (!s.initialized.load() || s.busy.exchange(true))
 				return false;
 			std::scoped_lock lock(s.workerMutex);
+			if (!s.initialized.load())
+			{
+				// Shutdown() ran in between: it clears initialized under this lock, so nothing starts after it
+				s.busy.store(false);
+				return false;
+			}
 			if (s.worker.joinable())
 				s.worker.join();	// The last piece of work has finished: it cleared busy as its very last step
 			s.cancel.store(false);
-			begin();	// Before the thread starts, so work that finishes at once can't be overwritten by it
-			s.worker = std::thread([work = std::move(work)]()
 			{
-				work();
-				S().busy.store(false);
-			});
+				std::scoped_lock guard(s.mutex);
+				CloseInstallerLock(s.installerLock);	// New work replaces a downloaded setup (a download locks it again)
+			}
+			begin();	// Before the thread starts, so work that finishes at once can't be overwritten by it
+			try
+			{
+				s.worker = std::thread([work = std::move(work)]()
+				{
+					work();
+					S().busy.store(false);
+				});
+			}
+			catch (const std::system_error &e)
+			{
+				// No thread: undo busy (or nothing could start again) and say why instead of what begin() announced
+				s.busy.store(false);
+				SEDX_CORE_ERROR_TAG(LOG_TAG, "The update thread could not start: {}", e.what());
+				const std::string error = std::string("a thread could not start: ") + e.what();
+				ChangeStatus([&error](Status &status)
+				{
+					status.state = status.state == State::Downloading ? State::DownloadFailed : State::CheckFailed;
+					status.error = error;
+				});
+				return false;
+			}
 			return true;
 		}
 
@@ -456,6 +495,45 @@ namespace SceneryEditorX::Update
 		}
 
 		/**
+		 * @brief The SHA-256 of a downloaded setup. On Windows it is read through a handle that lets others read the file
+		 * (Setup itself, the permission prompt) but not write, rename or delete it, and that handle comes back in lock,
+		 * open: anything running as the user can write to the cache folder, so the file stays as checked until it has
+		 * started. Elsewhere it is a plain read (those builds don't run setups). Empty, error set, when it can't be read.
+		 */
+		std::string HashAndLock(const fs::path &path, void *&lock, std::string &error)
+		{
+			lock = nullptr;
+#if defined(_WIN32)
+			HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+				FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+			if (file == INVALID_HANDLE_VALUE)
+			{
+				error = "could not open " + VFS::ToUtf8(path.filename()) + " (Windows error " + std::to_string(GetLastError()) + ")";
+				return {};
+			}
+			Utils::Sha256 hasher;
+			std::vector<char> buffer(1 << 16);
+			for (;;)
+			{
+				DWORD read = 0;
+				if (!ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr))
+				{
+					error = "could not read " + VFS::ToUtf8(path.filename()) + " (Windows error " + std::to_string(GetLastError()) + ")";
+					CloseHandle(file);
+					return {};
+				}
+				if (read == 0)
+					break;
+				hasher.Update(buffer.data(), read);
+			}
+			lock = file;
+			return hasher.FinishHex();
+#else
+			return Utils::Sha256File(path, &error);
+#endif
+		}
+
+		/**
 		 * @brief The SHA-256 the release publishes for a file: GitHub's digest, else <file>.sha256, else SHA256SUMS.txt.
 		 * Empty when there is none (error says why) or the download was cancelled while a listing was read (cancelled).
 		 */
@@ -539,11 +617,21 @@ namespace SceneryEditorX::Update
 			std::error_code ec;
 			fs::create_directories(folder, ec);
 
-			const auto ready = [&](const fs::path &path)
+			// The setup in place, locked against changes and hashed through that lock (HashAndLock): Downloaded when it
+			// matches, and it stays locked until it runs, so what runs is what was checked
+			const auto lockAndCheck = [&](const fs::path &path, std::string &actual)
 			{
+				void *lock = nullptr;
+				actual = HashAndLock(path, lock, error);
+				if (actual != expected)
 				{
-					std::scoped_lock lock(s.mutex);
-					s.expectedSha256 = expected;
+					CloseInstallerLock(lock);
+					return false;
+				}
+				{
+					std::scoped_lock guard(s.mutex);
+					CloseInstallerLock(s.installerLock);
+					s.installerLock = lock;
 				}
 				ChangeStatus([&](Status &status)
 				{
@@ -551,13 +639,13 @@ namespace SceneryEditorX::Update
 					status.installer = path;
 					status.error.clear();
 				});
+				return true;
 			};
 
 			// Downloaded before (and still intact): nothing to fetch
-			if (fs::is_regular_file(target, ec) && Utils::Sha256File(target) == expected)
+			if (std::string actual; fs::is_regular_file(target, ec) && lockAndCheck(target, actual))
 			{
 				SEDX_CORE_INFO_TAG(LOG_TAG, "{} was downloaded before and its SHA-256 matches", installer.name);
-				ready(target);
 				return;
 			}
 
@@ -596,25 +684,25 @@ namespace SceneryEditorX::Update
 				}
 			}
 
-			const std::string actual = Utils::Sha256File(partial, &error);
-			if (actual != expected)
+			fs::remove(target, ec);
+			fs::rename(partial, target, ec);
+			if (ec)
 			{
 				fs::remove(partial, ec);
+				fail("could not move the download into place: " + ec.message());
+				return;
+			}
+
+			std::string actual;
+			if (!lockAndCheck(target, actual))
+			{
+				fs::remove(target, ec);
 				if (!actual.empty())	// The hashes go to the log; the message (also the status bar's latest warning) stays short
 					SEDX_CORE_INFO_TAG(LOG_TAG, "{}: SHA-256 {}, the release publishes {}", installer.name, actual, expected);
 				fail(actual.empty() ? "the download could not be read back: " + error : "the download doesn't match the SHA-256 the release publishes");
 				return;
 			}
-
-			fs::remove(target, ec);
-			fs::rename(partial, target, ec);
-			if (ec)
-			{
-				fail("could not move the download into place: " + ec.message());
-				return;
-			}
 			SEDX_CORE_INFO_TAG(LOG_TAG, "Downloaded {} to {} (SHA-256 checked)", installer.name, VFS::ToUtf8(target));
-			ready(target);
 		}
 
 		/* @brief Leftovers of earlier updates: partial downloads, and setups of versions not newer than this one. */
@@ -655,7 +743,18 @@ namespace SceneryEditorX::Update
 			std::scoped_lock lock(s.mutex);
 			s.options = options;
 		}
-		s.curlReady.store(curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK);	// Reference counted: the Gateway client shares it
+		// Reference counted: the Gateway client shares it. Without it no check could work: stay uninitialized and say so
+		if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK)
+		{
+			SEDX_CORE_ERROR_TAG(LOG_TAG, "libcurl could not be initialized: no update checks in this session");
+			ChangeStatus([](Status &status)
+			{
+				status.state = State::CheckFailed;
+				status.error = "the network library (libcurl) could not be initialized";
+			});
+			return;
+		}
+		s.curlReady.store(true);
 		RemoveOldDownloads();
 		if (options.testServer)
 			SEDX_CORE_WARN_TAG(LOG_TAG, "Update checks use a test server: {}", options.latestReleaseUrl);
@@ -665,13 +764,18 @@ namespace SceneryEditorX::Update
 	void UpdateClient::Shutdown()
 	{
 		ClientState &s = S();
-		if (!s.initialized.exchange(false))
-			return;
-		s.cancel.store(true);
 		{
+			// Under the worker lock: StartWork checks initialized again under it, so no thread starts after this
 			std::scoped_lock lock(s.workerMutex);
+			if (!s.initialized.exchange(false))
+				return;
+			s.cancel.store(true);
 			if (s.worker.joinable())
 				s.worker.join();
+		}
+		{
+			std::scoped_lock lock(s.mutex);
+			CloseInstallerLock(s.installerLock);
 		}
 		s.busy.store(false);
 		if (s.curlReady.exchange(false))
@@ -814,7 +918,6 @@ namespace SceneryEditorX::Update
 	{
 		ClientState &s = S();
 		fs::path installer;
-		std::string expected;
 		{
 			std::scoped_lock lock(s.mutex);
 			if (s.status.state != State::Downloaded)
@@ -822,16 +925,15 @@ namespace SceneryEditorX::Update
 				error = "no update has been downloaded";
 				return false;
 			}
+#if defined(_WIN32)
+			// Locked since its check (HashAndLock): unchanged, so nothing needs hashing again here, on the main thread
+			if (!s.installerLock)
+			{
+				error = "the downloaded setup isn't held as checked any more: download it again";
+				return false;
+			}
+#endif
 			installer = s.status.installer;
-			expected = s.expectedSha256;
-		}
-
-		// Checked again: the file sat in a folder anything running as the user can write to
-		if (Utils::Sha256File(installer) != expected)
-		{
-			error = "the downloaded setup changed since it was checked; download it again";
-			ChangeStatus([](Status &status) { status.state = State::Available; });
-			return false;
 		}
 
 #if defined(_WIN32)
@@ -849,9 +951,13 @@ namespace SceneryEditorX::Update
 			const DWORD code = GetLastError();
 			error = code == ERROR_CANCELLED ? std::string("the setup was cancelled at the Windows permission prompt")
 				: "Windows could not start the setup (error " + std::to_string(code) + ")";
-			return false;
+			return false;	// Still locked: Install can be tried again
 		}
 		SEDX_CORE_INFO_TAG(LOG_TAG, "Started {}: closing the editor so it can update", VFS::ToUtf8(installer));
+		{
+			std::scoped_lock lock(s.mutex);
+			CloseInstallerLock(s.installerLock);	// Setup is running: it updates (and may copy) its own file from here
+		}
 		return true;
 #else
 		error = "this build can't install updates itself: download the release from its page";

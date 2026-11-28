@@ -179,6 +179,32 @@ TEST_CASE("The Windows installer is the setup named for the release's version", 
 	installer = FindWindowsInstaller(release);
 	REQUIRE(installer);
 	CHECK(installer->name == "SceneryEditorX-0.2.129.630-Alpha-Setup.exe");
+
+	// Three-part versions: the tag's and the file's are compared as versions, with or without the build number
+	const std::string threePart = R"(,
+		{ "name": "SceneryEditorX-0.2.63-Beta-Setup.exe", "browser_download_url": "https://x/4" })";
+	REQUIRE(ParseRelease(ReleaseJson("v0.2.63", threePart), release, error));
+	installer = FindWindowsInstaller(release);
+	REQUIRE(installer);
+	CHECK(installer->name == "SceneryEditorX-0.2.63-Beta-Setup.exe");
+	REQUIRE(ParseRelease(ReleaseJson("v0.2.63.0", threePart), release, error));
+	REQUIRE(FindWindowsInstaller(release));
+	CHECK(FindWindowsInstaller(release)->name == "SceneryEditorX-0.2.63-Beta-Setup.exe");
+	const std::string fourPart = R"(,
+		{ "name": "sceneryeditorx-0.2.64.0-rc1-setup.EXE", "browser_download_url": "https://x/5" })";
+	REQUIRE(ParseRelease(ReleaseJson("v0.2.64", fourPart), release, error));
+	REQUIRE(FindWindowsInstaller(release));
+	CHECK(FindWindowsInstaller(release)->name == "sceneryeditorx-0.2.64.0-rc1-setup.EXE");
+
+	// The channel is letters and digits: not empty, no dashes, dots or other characters
+	const std::string badChannels = R"(,
+		{ "name": "SceneryEditorX-0.2.65.0-Alpha-x86-Setup.exe", "browser_download_url": "https://x/6" },
+		{ "name": "SceneryEditorX-0.2.65.0-Al.pha-Setup.exe", "browser_download_url": "https://x/7" },
+		{ "name": "SceneryEditorX-0.2.65.0-Al pha-Setup.exe", "browser_download_url": "https://x/8" },
+		{ "name": "SceneryEditorX-0.2.65.0--Setup.exe", "browser_download_url": "https://x/9" },
+		{ "name": "SceneryEditorX-0.2.65.0.Setup.exe", "browser_download_url": "https://x/10" })";
+	REQUIRE(ParseRelease(ReleaseJson("v0.2.65.0", badChannels), release, error));
+	CHECK_FALSE(FindWindowsInstaller(release));
 }
 
 TEST_CASE("Checksum listings give a file's hash", "[update][checksum]")

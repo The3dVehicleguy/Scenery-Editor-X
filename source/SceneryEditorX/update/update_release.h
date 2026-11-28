@@ -103,8 +103,9 @@ namespace SceneryEditorX::Update
 	const ReleaseAsset *FindAsset(const Release &release, std::string_view name);
 
 	/**
-	 * @brief The Windows setup of a release: SceneryEditorX-<release version>-<channel>-Setup.exe (any channel; the
-	 * version in the name must be the tag's). nullptr when the release has none.
+	 * @brief The Windows setup of a release: SceneryEditorX-<version>-<channel>-Setup.exe, case-insensitive. The
+	 * version in the name must equal the tag's as a version (0.2.63 and 0.2.63.0 match), the channel is letters and
+	 * digits (Alpha, Beta, RC1). nullptr when the release has none.
 	 */
 	const ReleaseAsset *FindWindowsInstaller(const Release &release);
 

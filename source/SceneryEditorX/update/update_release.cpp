@@ -29,6 +29,7 @@
  * -------------------------------------------------------
  */
 #include "update_release.h"
+#include <algorithm>
 #include <nlohmann/json.hpp>
 #include <SceneryEditorX/utils/sha256.h>
 
@@ -264,15 +265,26 @@ namespace SceneryEditorX::Update
 
 	const ReleaseAsset *FindWindowsInstaller(const Release &release)
 	{
-		const std::string prefix = "sceneryeditorx-" + release.version.ToString() + "-";
+		constexpr std::string_view PREFIX = "sceneryeditorx-";
 		constexpr std::string_view SUFFIX = "-setup.exe";
 		for (const ReleaseAsset &asset : release.assets)
 		{
+			// sceneryeditorx-<version>-<channel>-setup.exe: the version compared as a version, so a three-part one
+			// ("0.2.63") matches the tag's whether either is written with the build number (".0") or without
 			const std::string name = ToLower(asset.name);
-			if (name.size() <= prefix.size() + SUFFIX.size() || !name.starts_with(prefix) || !name.ends_with(SUFFIX))
+			if (name.size() <= PREFIX.size() + SUFFIX.size() || !name.starts_with(PREFIX) || !name.ends_with(SUFFIX))
 				continue;
-			const std::string_view channel = std::string_view(name).substr(prefix.size(), name.size() - prefix.size() - SUFFIX.size());
-			if (channel.find_first_of("/\\") == std::string_view::npos)
+			const std::string_view middle = std::string_view(name).substr(PREFIX.size(), name.size() - PREFIX.size() - SUFFIX.size());
+			const size_t dash = middle.find('-');
+			if (dash == std::string_view::npos)
+				continue;
+			const std::optional<Version> version = ParseVersion(middle.substr(0, dash));
+			const std::string_view channel = middle.substr(dash + 1);
+			const bool channelOk = !channel.empty() && std::all_of(channel.begin(), channel.end(), [](const char c)
+			{
+				return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');	// "alpha", "beta", "rc1" (lowercased above)
+			});
+			if (version && *version == release.version && channelOk)
 				return &asset;
 		}
 		return nullptr;
