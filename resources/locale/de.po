@@ -30,6 +30,11 @@ msgid "Camera"
 msgstr "Kamera"
 
 #: source/Editor/core/editor_layer.cpp
+#: source/Editor/core/editor_updates.cpp
+msgid "Check for Updates..."
+msgstr ""
+
+#: source/Editor/core/editor_layer.cpp
 msgid "Choose a Navigation Keymap..."
 msgstr "Navigations-Tastenbelegung wählen..."
 
@@ -331,6 +336,213 @@ msgstr "Das Projekt als X-Plane-Szenerie-Paket schreiben: Earth nav data/apt.dat
 msgid "Search"
 msgstr "Suchen"
 
+#: source/Editor/core/editor_updates.cpp
+msgid "All Releases"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Asking GitHub for the newest release..."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "At most once a day, a few seconds after the editor starts, Scenery Editor X asks GitHub whether a newer release is out. The request tells GitHub this editor's version, nothing else. Help > Check for Updates asks at any time."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "At most once a day, a few seconds after the editor starts. The request tells GitHub this editor's version, nothing else"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#: source/Editor/core/project_dialogs.cpp
+#: source/Editor/core/project_hub.cpp
+msgid "Cancel"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Check Again"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Check Now"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Check for updates at startup"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Click to see what's new and update"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Close without saving? The unsaved project changes are kept as recovery data and offered when the project opens again."
+msgstr ""
+
+#. {} is the size of the setup in megabytes
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Download and Install ({} MB)"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Download the new version from the release page."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Downloaded, and its SHA-256 matches the release."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Downloading update..."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Downloading update: {}%"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Downloads the Windows setup from the release, checks it against the SHA-256 the release publishes, then offers to install it"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Install Without Saving"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Install and Close Editor"
+msgstr ""
+
+#. {} is the editor's version, e.g. 0.2.128.629
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Installed: {}"
+msgstr ""
+
+#. {} is a date and time, e.g. 2026-11-27 14:05 UTC
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Last checked {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Later"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Offer It Again"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Release Page"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Released {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Remind Me Later"
+msgstr ""
+
+#. {0} is the new version, {1} the installed one
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Scenery Editor X {0} is available. You have {1}."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Setup didn't start: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Setup updates Scenery Editor X once the editor has closed. It shows what it will do before it starts."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Skip This Version"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Skipped version: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "The download failed: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "The newest release is {}: this build is newer."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "The release has no notes."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "The update check failed: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "This release has no Windows setup: download it from the release page."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Try Again"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Update ready to install"
+msgstr ""
+
+#. Help menu item; {} is the new version
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Update {} Available..."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Update {} available"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Updates haven't been checked yet."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "What's new"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "You chose to skip this version."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "You have the newest version of Scenery Editor X."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "You have unsaved changes. Save them first: the editor closes when Setup starts."
+msgstr ""
+
+#. Download progress in megabytes, e.g. "12.5 of 40.2 MB" (the second form: size unknown)
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "{0} of {1} MB"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "{} MB"
+msgstr ""
+
 #: source/Editor/core/editor_visibility.cpp
 #, python-brace-format
 msgid "Change visibility of {} item"
@@ -492,6 +704,10 @@ msgstr "Werkzeuge"
 #: source/Editor/core/editor_welcome.cpp
 msgid "Translations"
 msgstr "Übersetzungen"
+
+#: source/Editor/core/editor_welcome.cpp
+msgid "Updates"
+msgstr ""
 
 #: source/Editor/core/editor_welcome.cpp
 msgid "Zoom speed"
@@ -854,11 +1070,6 @@ msgstr "Assets, die das Projekt aus seinem eigenen Ordner platziert (objects/...
 #: source/Editor/core/project_dialogs.cpp
 msgid "Author"
 msgstr "Autor"
-
-#: source/Editor/core/project_dialogs.cpp
-#: source/Editor/core/project_hub.cpp
-msgid "Cancel"
-msgstr ""
 
 #: source/Editor/core/project_dialogs.cpp
 msgid "City"

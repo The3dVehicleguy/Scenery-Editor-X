@@ -1,0 +1,294 @@
+# Publishes a Scenery Editor X release on GitHub, which the editor's update check (Help > Check for Updates, and once a
+# day at startup) then offers to everyone. docs/RELEASING.md has the whole procedure.
+#
+# Only a pushed tag publishes, and only one that passes the gate (scripts/ci/release_gate.sh): named
+# v<SEDX_VERSION_STRING> (like v0.2.128.629), matching source/resource.h at its commit, on the `release` branch, newer
+# than every release so far, with a "## <version>" section in CHANGELOG.md (the release notes). Then the unit tests
+# must pass on Linux, macOS and Windows and the Windows installer must build and start, before the publish job creates
+# the release with the installer and its SHA-256.
+#
+# Pull requests that change the release pipeline, and manual runs, go through the same build as a dry run: the gate
+# checks only the version, the installer is kept as a workflow artifact for two weeks, and nothing is published.
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ dev, release ]
+    paths:
+      - .github/workflows/release.yml
+      - scripts/ci/release_gate.sh
+      - scripts/ci/build_release_windows.ps1
+      - scripts/ci/vcpkg_prebuilt.ps1
+      - installer/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  RELEASE_BRANCH: release
+  INSTALLER_CHANNEL: Alpha
+  VULKAN_SDK_VERSION: 1.4.350.0
+  # The SDK's optional headers the editor compiles against, besides its default components
+  VULKAN_SDK_COMPONENTS: com.lunarg.vulkan.glm com.lunarg.vulkan.volk com.lunarg.vulkan.vma
+
+jobs:
+  gate:
+    name: Release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.gate.outputs.version }}
+      tag: ${{ steps.gate.outputs.tag }}
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0              # Every branch and tag: the gate checks the tag is on the release branch
+          persist-credentials: false
+
+      - name: Releases published so far
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq '.[].tag_name' > "${RUNNER_TEMP}/published.txt"
+
+      - name: Check the tag, the version, the release branch and the changelog
+        id: gate
+        run: |
+          notes="${RUNNER_TEMP}/release-notes.md"
+          if [ "${GITHUB_EVENT_NAME}" = push ]; then
+            # Fails when the branch doesn't exist yet; the gate then says so
+            git fetch --no-tags origin "+refs/heads/${RELEASE_BRANCH}:refs/remotes/origin/${RELEASE_BRANCH}" || true
+            bash scripts/ci/release_gate.sh --tag "${GITHUB_REF_NAME}" --release-ref "origin/${RELEASE_BRANCH}" \
+              --published "${RUNNER_TEMP}/published.txt" --notes "${notes}"
+          else
+            bash scripts/ci/release_gate.sh --notes "${notes}"
+          fi
+
+      - name: Keep the release notes
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-notes
+          path: ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+          retention-days: 14
+
+  # The gate's token can't see draft releases; this job's (contents: write) can. A draft for the tag stops the run here,
+  # before the Windows build, instead of only at the publish job hours later. Nothing from the repository runs here.
+  drafts:
+    name: No release for the tag yet
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: No release for this tag yet, drafts included
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | if .draft then \"draft\" else \"published\" end")
+          if [ -n "${existing}" ]; then
+            echo "::error title=Release::${TAG} has a release already (${existing}): delete it on GitHub, or release a new version"
+            exit 1
+          fi
+
+  unit-tests:
+    name: Unit tests
+    needs: gate
+    uses: ./.github/workflows/unit-tests.yml
+
+  windows:
+    name: Windows installer
+    needs: [ gate, drafts ]
+    # drafts runs only for a pushed tag: skipped (a pull request, a manual run) doesn't stop the build
+    if: ${{ !cancelled() && needs.gate.result == 'success' && needs.drafts.result != 'failure' }}
+    runs-on: windows-latest
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      actions: read                         # Finds and downloads the prebuilt vcpkg packages
+    env:
+      # The prebuilt packages (vcpkg-packages.yml), read-only: a release never changes the set others build from
+      VCPKG_BINARY_SOURCES: clear;files,C:\vcpkg-cache,read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The submodules use SSH URLs; the editor build needs all of them
+      - name: Submodules
+        shell: bash
+        run: >-
+          git -c 'url.https://github.com/.insteadOf=git@github.com:'
+          submodule update --init --recursive --depth 1 --jobs 4
+
+      # Restored and saved as separate steps, so what a long first run installed is kept even when a later step fails.
+      # The key names the components: a change to them installs the SDK again instead of restoring one without them.
+      - name: Vulkan SDK (cached)
+        id: vulkan-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}-glm-volk-vma
+
+      - name: Install the Vulkan SDK
+        if: steps.vulkan-cache.outputs.cache-hit != 'true'
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'vulkan_sdk.exe'
+          Invoke-WebRequest "https://sdk.lunarg.com/sdk/download/$env:VULKAN_SDK_VERSION/windows/vulkan_sdk.exe" -OutFile $installer
+          $root = "C:\VulkanSDK\$env:VULKAN_SDK_VERSION"
+          $arguments = @('--root', $root, '--accept-licenses', '--default-answer', '--confirm-command', 'install') + ($env:VULKAN_SDK_COMPONENTS -split ' ')
+          $process = Start-Process $installer -ArgumentList $arguments -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "The Vulkan SDK installer failed (exit code $($process.ExitCode))." }
+          if (-not (Test-Path "$root\Lib\slang.lib")) { throw "The Vulkan SDK at $root has no Lib\slang.lib." }
+          # Checked before the cache step keeps it: an SDK without its components is never saved under this key
+          foreach ($header in 'glm\glm.hpp', 'Volk\volk.h', 'vma\vk_mem_alloc.h') {
+            if (-not (Test-Path "$root\Include\$header")) { throw "The Vulkan SDK at $root has no Include\$header ($env:VULKAN_SDK_COMPONENTS)." }
+          }
+
+      - name: Keep the Vulkan SDK
+        if: steps.vulkan-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: C:\VulkanSDK\${{ env.VULKAN_SDK_VERSION }}
+          key: vulkan-sdk-windows-${{ env.VULKAN_SDK_VERSION }}-glm-volk-vma
+
+      # The installer itself isn't signed, but every file the setup ships from the SDK is (the Slang DLLs and the
+      # Vulkan Runtime installer): checked on every run, a cached SDK included, so nothing unsigned is packaged
+      - name: Check the Vulkan SDK's signatures
+        run: |
+          $root = "C:\VulkanSDK\$env:VULKAN_SDK_VERSION"
+          $files = @(Get-ChildItem "$root\Bin" -Filter 'slang*.dll') + @(Get-Item "$root\Helpers\VulkanRT.exe")
+          if ($files.Count -lt 4) { throw "The Vulkan SDK at $root is missing the Slang DLLs or Helpers\VulkanRT.exe." }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '^CN="?LunarG, Inc\.') {
+              throw "$($file.Name) isn't validly signed by LunarG ($($signature.Status); $($signature.SignerCertificate.Subject))."
+            }
+          }
+          Write-Host "$($files.Count) SDK files signed by LunarG, Inc."
+
+      - name: Use the Vulkan SDK
+        run: |
+          $root = "C:\VulkanSDK\$env:VULKAN_SDK_VERSION"
+          "VULKAN_SDK=$root" | Add-Content $env:GITHUB_ENV
+          "$root\Bin" | Add-Content $env:GITHUB_PATH
+
+      # The newest package set from a trusted run of vcpkg-packages.yml (an Actions cache wouldn't do: it's scoped to the
+      # ref that saved it, and every release is a new tag). Without one, every port is built from source.
+      - name: Prebuilt vcpkg packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci/vcpkg_prebuilt.ps1 -Fetch -Destination 'C:\vcpkg-cache'
+
+      - name: vcpkg ports
+        run: ./scripts/ci/build_release_windows.ps1 -VcpkgOnly -VcpkgBuildtrees 'C:\vb'
+
+      - name: NSIS
+        run: |
+          if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue) -and -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
+            choco install nsis --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Installing NSIS failed (exit code $LASTEXITCODE)." }
+          }
+
+      # Configure, Release build, installer, a start of the staged editor, SHA-256 (scripts/ci/build_release_windows.ps1)
+      - name: Build the editor and its installer
+        run: ./scripts/ci/build_release_windows.ps1 -SkipVcpkg -Channel $env:INSTALLER_CHANNEL
+
+      - name: Keep the installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: |
+            build/installer/SceneryEditorX-*-Setup.exe
+            build/installer/SceneryEditorX-*-Setup.exe.sha256
+            build/installer/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Keep the vcpkg logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vcpkg-logs
+          path: C:\vb\bt\**\*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  publish:
+    name: Publish the release
+    needs: [ gate, unit-tests, windows ]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && needs.gate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write             # Creates the release; the tag exists already
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
+    env:
+      TAG: ${{ needs.gate.outputs.tag }}
+      VERSION: ${{ needs.gate.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-installer
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-notes
+          path: notes
+
+      - name: Check the files against their SHA-256
+        working-directory: dist
+        run: |
+          sha256sum --check --strict SHA256SUMS.txt
+          sha256sum --check --strict "SceneryEditorX-${VERSION}-${INSTALLER_CHANNEL}-Setup.exe.sha256"
+          ls -l
+
+      - name: Release notes
+        run: |
+          {
+            cat notes/release-notes.md
+            echo
+            echo "---"
+            echo
+            echo "**Windows:** run \`SceneryEditorX-${VERSION}-${INSTALLER_CHANNEL}-Setup.exe\`; it updates an installed copy in place. Its SHA-256 is in \`SHA256SUMS.txt\`."
+            echo "Installed editors find this release by themselves (once a day at startup, or Help > Check for Updates)."
+          } > "${RUNNER_TEMP}/notes.md"
+
+      # Checked again (the drafts job ran hours ago): a draft for the tag made since stops the publish instead of
+      # leaving two releases for one version
+      - name: No release for this tag yet, drafts included
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate --jq ".[] | select(.tag_name == \"${TAG}\") | if .draft then \"draft\" else \"published\" end")
+          if [ -n "${existing}" ]; then
+            echo "::error title=Release::${TAG} has a release already (${existing}): delete it on GitHub, or release a new version"
+            exit 1
+          fi
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${TAG}" dist/*
+          --repo "${GITHUB_REPOSITORY}"
+          --verify-tag
+          --title "Scenery Editor X ${VERSION}"
+          --notes-file "${RUNNER_TEMP}/notes.md"
+          --latest

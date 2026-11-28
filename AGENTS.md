@@ -151,6 +151,13 @@ The dependency-light, cross-platform Catch2 unit suites that only need `source/`
   font character-map reader that picks CJK fonts (it also reads `resources/fonts` when run from the repository root).
   Standard library only, fully green.
 
+- **`UpdateTests`** (`source/Tests/update_tests`) — the update check's decisions (`SceneryEditorX/update/update_release.*`)
+  and the SHA-256 that checks a downloaded installer (`utils/sha256.*`): versions parsed from `SEDX_VERSION_STRING` and
+  `v<version>` release tags and compared part by part, GitHub's release JSON (null fields, digests), which file is the
+  Windows setup, sha256sum listings, trusted download URLs (only the repository's release files), the once-a-day
+  schedule, skipped versions, release notes as plain text, and the FIPS 180-4 test vectors. Standard library plus
+  `dependency/json`, fully green. The network side (`update/update_client.*`, libcurl) is part of the editor build.
+
 The other suites are **not** Linux-buildable as written: `MemoryAllocatorTests` links `vulkan-1` and needs the Vulkan
 SDK; `VulkanSmokeTests` (opt-in via `SEDX_ENABLE_VULKAN_SMOKE_TESTS`) needs the full engine.
 
@@ -301,6 +308,12 @@ g++ -std=c++20 -O2 -pthread -DLIBCONFIG_STATIC -DLIBCONFIGXX_STATIC $INCS -I$LC 
 g++ -std=c++20 -O2 -pthread -Wall -Wextra $INCS source/Tests/i18n_tests/*.cpp source/SceneryEditorX/i18n/*.cpp $LIBS \
     -o build_linux_tests/I18nTests
 ./build_linux_tests/I18nTests
+
+# 9. UpdateTests (fully green)
+g++ -std=c++20 -O2 -pthread -Wall -Wextra $INCS source/Tests/update_tests/*.cpp \
+    source/SceneryEditorX/update/update_release.cpp source/SceneryEditorX/utils/sha256.cpp $LIBS \
+    -o build_linux_tests/UpdateTests
+./build_linux_tests/UpdateTests
 ```
 
 MinGW (MSYS2) has no `fsync`, which libconfig's `wincompat.h` maps its `posix_fsync` to there: on that toolchain drop the
@@ -311,7 +324,10 @@ MinGW (MSYS2) has no `fsync`, which libconfig's `wincompat.h` maps its `posix_fs
 and MSYS2 g++ on Windows; it leaves out `[xplane-install]` / `[library-sweep]` cases. The **Unit tests** workflow
 (`.github/workflows/unit-tests.yml`) runs it on ubuntu-latest, macos-latest and windows-latest for pull requests into
 `dev` and pushes to `dev` / `master`. When a suite gains an engine source, add it to the script's list as well as to the
-recipe above (test files are picked up from the suite's folder). `SEDX_TEST_CXXFLAGS=-DSEDX_FLOAT_CHARS_FALLBACK
+recipe above (test files are picked up from the suite's folder). The same jobs then run `scripts/ci/compile_check.sh`:
+editor sources the suites can't build because they need a library (`update/update_client.cpp`, libcurl) are compiled,
+not linked, with each platform's compiler and its own libcurl headers, the logger replaced by `scripts/ci/stubs`. Add a
+source there when it has per-OS code and needs only such a library. `SEDX_TEST_CXXFLAGS=-DSEDX_FLOAT_CHARS_FALLBACK
 SEDX_TEST_OUT=build/unit-tests-fallback` runs every suite on the float text fallback the macOS build uses.
 The same workflow runs `cmake -P cmake/tests/triplet_detection.cmake` (CMake only, no compiler or vcpkg): the vcpkg
 triplet `cmake/detect-platform-compiler.cmake` picks when neither the user nor a preset sets one, for each host,
@@ -358,7 +374,9 @@ install CMake + Vulkan SDK, set `VULKAN_SDK`/`XPLANE_12_SDK`, and use the `windo
 | `claude-pr.yml` | pull request opened / updated | Claude reviews the diff for bugs and single-platform code. |
 | `validate-github-forms.yml` | changes under `.github/` | `python .github/scripts/validate_github_forms.py` (forms, labels, triage map; a tab in a form breaks it on GitHub) and actionlint. |
 | `sync-labels.yml` | `labels.json` changes, or run by hand | Creates and recolours labels; never deletes. |
-| `unit-tests.yml` | pull requests into `dev`, pushes to `dev` / `master` | The standard-library Catch2 suites on Linux, macOS and Windows (`scripts/ci/build_unit_tests.sh`). |
+| `unit-tests.yml` | pull requests into `dev` / `release`, pushes to `dev` / `master` / `release`, called by `release.yml` | The standard-library Catch2 suites on Linux, macOS and Windows (`scripts/ci/build_unit_tests.sh`). |
+| `release.yml` | a pushed `v*` tag; pull requests changing the release pipeline (dry run) | The release gate (`scripts/ci/release_gate.sh`: tag `v<SEDX_VERSION_STRING>` on the `release` branch, newer than every release, a `## <version>` CHANGELOG section), the unit tests, the Windows Release build + installer (`scripts/ci/build_release_windows.ps1`), then a GitHub release with the setup and its SHA-256, which the editor's update check offers. Dry runs publish nothing. See `docs/RELEASING.md`. |
+| `vcpkg-packages.yml` | pushes to `dev` / `release` / `master` changing `vcpkg.json` or the vcpkg submodule, Mondays, by hand, dependency pull requests | Builds the vcpkg ports once and uploads them as the artifact `vcpkg-x64-windows` (`scripts/ci/vcpkg_prebuilt.ps1`); the release job restores the newest set from a push / schedule / manual run on `dev` / `release` / `master`, read-only. Spec: `spec/spec-process-cicd-vcpkg-packages.md`. |
 | `localization.yml` | pull requests into `dev` touching `source/`, `resources/locale/`, `tools/i18n/` | Tests `tools/i18n` on the three platforms; extracts the strings, updates the catalogs, lists added / removed text in the run summary, runs `check` and `lint`, and commits the refreshed `resources/locale` files to the pull request's branch (pull before pushing again). |
 
 Issue and comment events run the workflow files on the **default branch (`master`)**, and GitHub shows the issue forms
@@ -366,7 +384,8 @@ from `master` too: changes to them take effect once they reach `master`.
 
 ### Making a change
 
-- Branch from `dev`; pull requests target `dev`. `master` only receives releases.
+- Branch from `dev`; pull requests target `dev`. `master` only receives releases. Releases are published only from a
+  `v<version>` tag on the `release` branch (`docs/RELEASING.md`): never push tags named `v*` for anything else.
 - `master` is the default branch, so `Closes #N` in a pull request into `dev` doesn't close the issue: list the issues
   in the pull request, and they're closed by hand or by the `dev` -> `master` release pull request.
 - Each change set that changes the app bumps the version in `source/resource.h`: `SEDX_PATCH` +1, `SEDX_BUILD` +1,

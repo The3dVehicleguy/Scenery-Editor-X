@@ -1,0 +1,101 @@
+# Builds Scenery Editor X's vcpkg ports (vcpkg.json) once and keeps them as a workflow artifact, vcpkg-x64-windows, so
+# releases, patches and alpha / beta builds start from ready packages instead of an hour of port builds. The release
+# workflow (release.yml) downloads the newest set from a trusted run of this one (scripts/ci/vcpkg_prebuilt.ps1 -Fetch)
+# and gives it to vcpkg read-only: every package whose ABI still matches (port version, features, triplet, compiler) is
+# restored, anything else is built from source as before. spec/spec-process-cicd-vcpkg-packages.md is the contract.
+#
+# Each run starts from the newest set, builds only what changed, drops packages the manifest no longer uses, and uploads
+# the result. The weekly run follows the runner image's compiler updates and keeps the artifact from expiring (90 days).
+# Pull request runs build and upload too, so a change can be checked, but their sets are never used by other runs.
+name: vcpkg packages
+
+on:
+  push:
+    branches: [ dev, release, master ]
+    paths:
+      - vcpkg.json
+      - dependency/vcpkg                    # The submodule's commit: a new port tree
+      - cmake/toolchains/sedx-windows.cmake
+      - scripts/ci/build_release_windows.ps1
+      - scripts/ci/vcpkg_prebuilt.ps1
+      - .github/workflows/vcpkg-packages.yml
+  pull_request:
+    branches: [ dev, release ]
+    paths:
+      - vcpkg.json
+      - dependency/vcpkg
+      - scripts/ci/vcpkg_prebuilt.ps1
+      - .github/workflows/vcpkg-packages.yml
+  schedule:
+    - cron: '17 4 * * 1'                    # Mondays 04:17 UTC, from the default branch's copy of this file
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch whose vcpkg.json and vcpkg commit to build
+        required: false
+        default: dev
+
+permissions:
+  contents: read
+  actions: read                             # Finds and downloads the previous set
+
+# One run at a time: each starts from the set the one before it uploaded
+concurrency:
+  group: vcpkg-packages-${{ github.event.pull_request.number || 'trusted' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ARTIFACT: vcpkg-x64-windows
+  TRIPLET: x64-windows
+  # Scheduled runs build dev (where the next release comes from); manual runs the branch asked for
+  BUILD_REF: ${{ inputs.ref || (github.event_name == 'schedule' && 'dev') || github.ref }}
+
+jobs:
+  windows:
+    name: x64-windows packages
+    runs-on: windows-latest
+    timeout-minutes: 240
+    env:
+      VCPKG_BINARY_SOURCES: clear;files,C:\vcpkg-cache,readwrite
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BUILD_REF }}
+          persist-credentials: false
+
+      - name: vcpkg submodule
+        shell: bash
+        run: git -c 'url.https://github.com/.insteadOf=git@github.com:' submodule update --init --depth 1 dependency/vcpkg
+
+      - name: Start from the newest package set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci/vcpkg_prebuilt.ps1 -Fetch -Destination 'C:\vcpkg-cache' -ArtifactName $env:ARTIFACT
+
+      # Short build-tree folder: some ports pass Windows' 260-character path limit under the checkout
+      - name: Build the ports that changed
+        run: ./scripts/ci/build_release_windows.ps1 -VcpkgOnly -VcpkgBuildtrees 'C:\vb'
+
+      - name: Keep only what vcpkg.json uses
+        run: ./scripts/ci/vcpkg_prebuilt.ps1 -Prune -Cache 'C:\vcpkg-cache' -Installed build\vcpkg_installed -ArtifactName $env:ARTIFACT -Triplet $env:TRIPLET
+
+      - name: Upload the package set
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: C:\vcpkg-cache
+          if-no-files-found: error
+          compression-level: 0              # The packages are zips already
+          retention-days: ${{ github.event_name == 'pull_request' && 7 || 90 }}
+
+      - name: Keep the vcpkg logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vcpkg-logs
+          path: C:\vb\bt\**\*.log
+          if-no-files-found: ignore
+          retention-days: 7

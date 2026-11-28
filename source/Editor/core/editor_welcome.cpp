@@ -32,6 +32,7 @@
 #include <Editor/core/editor_theme.h>
 #include <Editor/core/editor_tools.h>
 #include <Editor/core/editor_ui.h>
+#include <Editor/core/editor_updates.h>
 #include <Editor/core/viewport_camera.h>
 #include <Editor/settings/editor_preferences.h>
 #include <SceneryEditorX/core/application/application.h>
@@ -410,6 +411,12 @@ namespace SceneryEditorX::EditorWelcome
 					DrawInterfacePage();
 					ImGui::EndTabItem();
 				}
+
+				if (ImGui::BeginTabItem(TrL("Updates"), nullptr, pageFlags(PreferencesPage::Updates)))
+				{
+					EditorUpdates::DrawPreferencesPage();
+					ImGui::EndTabItem();
+				}
 				ImGui::EndTabBar();
 			}
 			s.selectPage.reset();
@@ -432,11 +439,12 @@ namespace SceneryEditorX::EditorWelcome
 				const std::string &arg = args[i];
 				force |= arg == "--welcome";
 				flags |= arg.starts_with("--");
-				// --preferences [navigation|tools|interface]: opens Preferences on a page (screenshots, translator context)
+				// --preferences [navigation|tools|interface|updates]: opens Preferences on a page (screenshots, translator context)
 				if (arg == "--preferences")
 				{
 					const std::string page = i + 1 < args.size() && !args[i + 1].starts_with("--") ? args[++i] : std::string();
-					OpenPreferences(page == "interface" ? PreferencesPage::Interface : page == "tools" ? PreferencesPage::Tools : PreferencesPage::Navigation);
+					OpenPreferences(page == "interface" ? PreferencesPage::Interface : page == "tools" ? PreferencesPage::Tools
+						: page == "updates" ? PreferencesPage::Updates : PreferencesPage::Navigation);
 				}
 			}
 		}

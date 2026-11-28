@@ -9,6 +9,26 @@ versions.
 
 ### Added
 
+- **Update check and release pipeline** (0.2.128.629; review follow-up 0.2.129.630: a 404 from GitHub keeps an update found before, the client's thread is joined at exit; 0.2.130.631: setups named with a three-part version are found, the update thread can't start after shutdown, and on Windows the checked setup stays locked against changes until it runs, so it isn't hashed again on the main thread; 0.2.131.632: only a test server on this computer may use plain http or serve its own downloads, older system libcurl versions build, and a draft release for the tag stops the publish; 0.2.132.633: redirects only to https, download URLs exactly <tag>/<file>, old setups cleaned up whatever their letter case, and the startup's cached answer never replaces a downloaded update or a check that is running; 0.2.133.634: with unsaved project changes, Install asks before it closes the editor, and small downloads (the release, checksum listings) time out after 30 s; 0.2.134.635: requests are only redirected to GitHub's hosts, and pre-releases are never offered; 0.2.135.636: a local test server may redirect to its own address, and Cancel stops the checksum of a large setup; 0.2.136.637: a checksum listing that can't be used is logged, and the release build checks LunarG's signature on every Vulkan SDK file it ships; 0.2.137.638: redirects to GitHub's user-content hosts (raw, gist, uploaded images) are refused, and Check for Updates pressed while the startup check reads its cache runs once that ends; 0.2.138.639: a setup downloads into a file nothing else may change, which is renamed into place through that same handle, over an older file instead of after deleting it, and the unit-test workflow compiles the update client on Linux, macOS and Windows; 0.2.139.640: a test server must be at the address 127.0.0.1 or [::1], not the name localhost; 0.2.140.641: the startup check goes straight on from its cached answer, the download's progress ignores GitHub's redirect, and where each request ended is checked against the same rule as its redirects). Release builds restore prebuilt vcpkg packages from the new `vcpkg-packages.yml` workflow (artifact `vcpkg-x64-windows`, rebuilt when `vcpkg.json` or the vcpkg submodule changes and every week) instead of compiling the ports for every tag; `spec/spec-process-cicd-vcpkg-packages.md` is its contract. A few seconds after it starts, at most once a day, the editor
+  asks GitHub whether a newer release of Scenery Editor X is out (**Edit › Preferences… › Updates** turns that off;
+  **Help › Check for Updates…** and the About box ask at any time). When one is, the **Software Update** window opens
+  once the startup windows are closed, with the release notes: on Windows, **Download and Install** downloads the
+  release's setup, checks it against the SHA-256 the release publishes (a download that doesn't match is thrown away),
+  and **Install and Close Editor** starts it as the editor closes; elsewhere **Release Page** opens the release.
+  **Skip This Version** and **Remind Me Later** are there too, and the status bar shows the update until it's
+  installed. Offline, a start offers what the last check found. Only files of this repository's releases are
+  downloaded. Command line: `--check-updates`, `--no-update-check`, `--update-url <url>` (a test server).
+  Releases are now published only by `.github/workflows/release.yml`, for a pushed tag `v<version>` on the new
+  `release` branch: its gate (`scripts/ci/release_gate.sh`) checks that the tag matches `source/resource.h`, is on
+  `release`, is newer than every release and has a `## <version>` section here (the release notes); then the unit
+  tests run on Linux, macOS and Windows and a Windows runner builds the Release editor and its installer
+  (`scripts/ci/build_release_windows.ps1`, which also starts the staged editor to check its files load), before the
+  release is created with the setup, its `.sha256` and `SHA256SUMS.txt`. Pull requests that change the pipeline get
+  a dry run that publishes nothing. The procedure is in `docs/RELEASING.md`, the workflows are listed in
+  `.github/workflows/README.md`. For developers: `SceneryEditorX/update/` (`update_release.*`, standard library only,
+  covered by the new `UpdateTests` suite; `update_client.*`, libcurl), `utils/sha256.*`, `Editor/core/editor_updates.*`;
+  `unit-tests.yml` can be called by other workflows and runs on `release` as well.
+
 - **Hide, isolate and lock** (0.2.120.621, issue #104; review follow-ups 0.2.121.622, 0.2.122.623, 0.2.123.624, 0.2.124.625, 0.2.125.626, 0.2.126.627, 0.2.127.628). Each OUTLINER row has an eye and a lock toggle on its left;
   a drag down either column sets every row it crosses, as one undo step, and a hidden or locked row covers what is
   below it (shown with a dimmed icon). Hiding is view-only: hidden things aren't drawn, hovered, picked, box-selected

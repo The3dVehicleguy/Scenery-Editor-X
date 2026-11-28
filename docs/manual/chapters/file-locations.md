@@ -49,6 +49,7 @@ To find a project's folder, open the `source.txt` files: each names its project.
 | `gateway\` | Scenery Gateway downloads (the airport list is refreshed after a day) |
 | `shaders\` | Compiled shaders, so startup is quick after the first run |
 | `thumbnails\` | Library asset previews, redrawn when an asset's file changes |
+| `updates\` | The last update check's answer, and a downloaded update's setup (removed once that version is installed) |
 
 ## On macOS and Linux
 

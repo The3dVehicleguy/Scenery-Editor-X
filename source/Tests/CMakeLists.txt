@@ -296,6 +296,40 @@ ENDIF()
 catch_discover_tests(I18nTests)
 
 # --------------------------------
+# Update Tests (the update check: release versions, GitHub release JSON, checksums, SHA-256; standard library only)
+# --------------------------------
+
+MESSAGE(STATUS "=================================================")
+MESSAGE(STATUS "Generating Update Unit Tests")
+
+FILE(GLOB UPDATE_TEST_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/update_tests/*.cpp
+)
+
+ADD_EXECUTABLE(UpdateTests
+    ${UPDATE_TEST_SOURCES}
+    ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/update/update_release.cpp
+    ${CMAKE_SOURCE_DIR}/source/SceneryEditorX/utils/sha256.cpp
+)
+
+TARGET_INCLUDE_DIRECTORIES(UpdateTests PRIVATE
+    ${CMAKE_SOURCE_DIR}/source
+)
+
+TARGET_LINK_LIBRARIES(UpdateTests PRIVATE
+    Catch2::Catch2WithMain
+    nlohmann_json::nlohmann_json
+)
+
+IF(_SEDX_MSVCLIKE)
+    TARGET_COMPILE_OPTIONS(UpdateTests PRIVATE /MP /W4 /utf-8)
+ELSE()
+    TARGET_COMPILE_OPTIONS(UpdateTests PRIVATE -Wall -Wextra -Wpedantic)
+ENDIF()
+
+catch_discover_tests(UpdateTests)
+
+# --------------------------------
 # X-Plane Format Tests (OBJ8, library.txt, scenery_packs.ini, apt.dat, airport index; standard library only)
 # --------------------------------
 
