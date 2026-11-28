@@ -250,14 +250,17 @@ namespace SceneryEditorX::Update
 			const std::string agent = UserAgent();
 			char errorBuffer[CURL_ERROR_SIZE] = {};
 			curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-			// Plain http only for a test server on this computer (Init checks), and only for its own address: redirects go
-			// to https only, a test server's too (GitHub's release files redirect to its https file host)
+			// Plain http only for a test server on this computer (Init checks). Redirects follow the same rule, and
+			// CheckHeader decides each one first (IsAllowedRedirect): https to GitHub, or http only back to the test
+			// server's own loopback address
 #if LIBCURL_VERSION_NUM >= 0x075500	// 7.85: the string options; the bitmask ones are deprecated since
-			curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, testServer ? "http,https" : "https");
-			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
+			const char *protocols = testServer ? "http,https" : "https";
+			curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, protocols);
+			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, protocols);
 #else	// An older system libcurl (Linux distributions)
-			curl_easy_setopt(curl, CURLOPT_PROTOCOLS, testServer ? static_cast<long>(CURLPROTO_HTTP | CURLPROTO_HTTPS) : static_cast<long>(CURLPROTO_HTTPS));
-			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, static_cast<long>(CURLPROTO_HTTPS));
+			const long protocols = testServer ? static_cast<long>(CURLPROTO_HTTP | CURLPROTO_HTTPS) : static_cast<long>(CURLPROTO_HTTPS);
+			curl_easy_setopt(curl, CURLOPT_PROTOCOLS, protocols);
+			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, protocols);
 #endif
 			curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 			curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
@@ -553,9 +556,10 @@ namespace SceneryEditorX::Update
 		 * open: anything running as the user can write to the cache folder, so the file stays as checked until it has
 		 * started. Elsewhere it is a plain read (those builds don't run setups). Empty, error set, when it can't be read.
 		 */
-		std::string HashAndLock(const fs::path &path, void *&lock, std::string &error)
+		std::string HashAndLock(const fs::path &path, void *&lock, std::string &error, bool &cancelled)
 		{
 			lock = nullptr;
+			cancelled = false;
 #if defined(_WIN32)
 			HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
 				FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
@@ -578,6 +582,12 @@ namespace SceneryEditorX::Update
 				if (read == 0)
 					break;
 				hasher.Update(buffer.data(), read);
+				if (S().cancel.load())	// Cancel / Shutdown: a setup of gigabytes isn't hashed to the end first
+				{
+					cancelled = true;
+					CloseHandle(file);
+					return {};
+				}
 			}
 			lock = file;
 			return hasher.FinishHex();
@@ -682,10 +692,11 @@ namespace SceneryEditorX::Update
 
 			// The setup in place, locked against changes and hashed through that lock (HashAndLock): Downloaded when it
 			// matches, and it stays locked until it runs, so what runs is what was checked
+			bool hashCancelled = false;
 			const auto lockAndCheck = [&](const fs::path &path, std::string &actual)
 			{
 				void *lock = nullptr;
-				actual = HashAndLock(path, lock, error);
+				actual = HashAndLock(path, lock, error, hashCancelled);
 				if (actual != expected)
 				{
 					CloseInstallerLock(lock);
@@ -709,6 +720,11 @@ namespace SceneryEditorX::Update
 			if (std::string actual; fs::is_regular_file(target, ec) && lockAndCheck(target, actual))
 			{
 				SEDX_CORE_INFO_TAG(LOG_TAG, "{} was downloaded before and its SHA-256 matches", installer.name);
+				return;
+			}
+			if (hashCancelled)
+			{
+				cancelled();
 				return;
 			}
 
@@ -759,6 +775,11 @@ namespace SceneryEditorX::Update
 			std::string actual;
 			if (!lockAndCheck(target, actual))
 			{
+				if (hashCancelled)
+				{
+					cancelled();	// The file stays: a later Download checks it again ("downloaded before")
+					return;
+				}
 				fs::remove(target, ec);
 				if (!actual.empty())	// The hashes go to the log; the message (also the status bar's latest warning) stays short
 					SEDX_CORE_INFO_TAG(LOG_TAG, "{}: SHA-256 {}, the release publishes {}", installer.name, actual, expected);
