@@ -300,16 +300,59 @@ namespace SceneryEditorX::EditorVisibility
 			return children;
 		}
 
-		/* @brief The scene's roots, read at most once per pass (a save, a lookup of waiting keys) and only when needed. */
-		struct RootsCache
+		/**
+		 * @brief What working out and looking up entity keys needs from the scene, read at most once per pass (a save, a
+		 * lookup of waiting keys) and only when needed: the roots, by name too, and each sibling's place among the siblings
+		 * with its name, numbered once per parent. A key level is then a lookup, not a walk of the siblings, so Hide
+		 * Unselected over thousands of roots stays linear.
+		 */
+		struct KeyIndex
 		{
 			std::optional<std::vector<entt::entity>> roots;
+			std::optional<std::unordered_map<std::string, std::vector<entt::entity>>> rootsByName;
+			std::unordered_map<entt::entity, uint32_t> nth;			// Place among same-named siblings
+			std::unordered_set<entt::entity> numbered;				// Parents whose children are in nth (entt::null: the roots)
 
-			const std::vector<entt::entity> &Get(const entt::registry &registry)
+			const std::vector<entt::entity> &GetRoots(const entt::registry &registry)
 			{
 				if (!roots)
 					roots = Roots(registry);
 				return *roots;
+			}
+
+			/* @brief The roots with a name, in the scene's order (nullptr when none). */
+			const std::vector<entt::entity> *RootsNamed(const entt::registry &registry, const std::string &name)
+			{
+				if (!rootsByName)
+				{
+					rootsByName.emplace();
+					for (const entt::entity root : GetRoots(registry))
+						(*rootsByName)[EditorScene::GetName(root)].push_back(root);
+				}
+				const auto it = rootsByName->find(name);
+				return it != rootsByName->end() ? &it->second : nullptr;
+			}
+
+			/* @brief How many siblings with the entity's name come before it under `parent` (entt::null: among the roots). */
+			uint32_t Nth(const entt::registry &registry, const entt::entity handle, const entt::entity parent)
+			{
+				if (numbered.insert(parent).second)
+				{
+					std::unordered_map<std::string_view, uint32_t> counts;
+					const auto number = [this, &counts](const entt::entity sibling) { nth[sibling] = counts[EditorScene::GetName(sibling)]++; };
+					if (parent == entt::null)
+					{
+						for (const entt::entity sibling : GetRoots(registry))
+							number(sibling);
+					}
+					else
+					{
+						for (const entt::entity sibling : Children(registry, parent))
+							number(sibling);
+					}
+				}
+				const auto it = nth.find(handle);
+				return it != nth.end() ? it->second : 0;
 			}
 		};
 
@@ -317,7 +360,7 @@ namespace SceneryEditorX::EditorVisibility
 		 * @brief "entity/Terrain scenery KHVN", "entity/Airport KHVN/Objects/traffic_cone_2#3": the names from the top of the
 		 * scene down to the entity, "#n" for the nth of siblings with that name (from 0, when n > 0). Empty when it is gone.
 		 */
-		std::string EntityKey(const uint64_t entityId, RootsCache &roots)
+		std::string EntityKey(const uint64_t entityId, KeyIndex &index)
 		{
 			entt::registry *registry = EditorScene::GetRegistry();
 			entt::entity handle = EditorScene::FindHandle(entityId);
@@ -328,14 +371,7 @@ namespace SceneryEditorX::EditorVisibility
 			{
 				const std::string_view name = EditorScene::GetName(handle);
 				const entt::entity parent = ParentOf(*registry, handle);
-				uint32_t nth = 0;
-				const std::vector<entt::entity> siblings = parent != entt::null ? Children(*registry, parent) : roots.Get(*registry);
-				for (const entt::entity sibling : siblings)
-				{
-					if (sibling == handle)
-						break;
-					nth += name == EditorScene::GetName(sibling) ? 1 : 0;
-				}
+				const uint32_t nth = index.Nth(*registry, handle, parent);
 				parts.push_back(EscapeKeyPart(name) + (nth > 0 ? "#" + std::to_string(nth) : std::string()));
 				handle = parent;
 			}
@@ -346,12 +382,13 @@ namespace SceneryEditorX::EditorVisibility
 		}
 
 		/* @brief The entity an EntityKey() names now, 0 when there is none. */
-		uint64_t ResolveEntityKey(const std::string_view key, const std::vector<entt::entity> &roots)
+		uint64_t ResolveEntityKey(const std::string_view key, KeyIndex &index)
 		{
 			entt::registry *registry = EditorScene::GetRegistry();
 			if (!registry)
 				return 0;
-			std::vector<entt::entity> candidates = roots;
+			std::vector<entt::entity> candidates;
+			bool top = true;	// The first part names a root: looked up by name
 			entt::entity found = entt::null;
 			for (const std::string_view part : SplitKey(key.substr(KEY_ENTITY.size())))
 			{
@@ -366,13 +403,23 @@ namespace SceneryEditorX::EditorVisibility
 						return 0;
 				}
 				found = entt::null;
-				uint32_t seen = 0;
-				for (const entt::entity candidate : candidates)
+				if (top)
 				{
-					if (name == EditorScene::GetName(candidate) && seen++ == nth)
+					const std::vector<entt::entity> *named = index.RootsNamed(*registry, name);
+					if (named && nth < named->size())
+						found = (*named)[nth];
+					top = false;
+				}
+				else
+				{
+					uint32_t seen = 0;
+					for (const entt::entity candidate : candidates)
 					{
-						found = candidate;
-						break;
+						if (name == EditorScene::GetName(candidate) && seen++ == nth)
+						{
+							found = candidate;
+							break;
+						}
 					}
 				}
 				if (found == entt::null)
@@ -386,7 +433,7 @@ namespace SceneryEditorX::EditorVisibility
 		 * @brief The key a target is saved under (empty when it can't be: a row with no airport open). An entity's key is
 		 * worked out again while it is there (it may have been renamed or moved) and remembered for when it is gone.
 		 */
-		std::string KeyOf(State &s, const Target &target, RootsCache &roots)
+		std::string KeyOf(State &s, const Target &target, KeyIndex &index)
 		{
 			switch (target.type)
 			{
@@ -396,7 +443,7 @@ namespace SceneryEditorX::EditorVisibility
 					return s.appliedAirport.empty() ? std::string() : RowKey(s.appliedAirport, target);
 				case TargetType::Entity:
 				{
-					if (std::string key = EntityKey(target.entity, roots); !key.empty())
+					if (std::string key = EntityKey(target.entity, index); !key.empty())
 					{
 						s.entityKeys[target.entity] = key;
 						return key;
@@ -416,7 +463,7 @@ namespace SceneryEditorX::EditorVisibility
 		{
 			if (s.pendingHidden.empty() && s.pendingLocked.empty())
 				return;
-			RootsCache roots;
+			KeyIndex index;
 			bool any = false;
 			const auto resolve = [&](std::vector<std::string> &pending, std::vector<Target> &targets, const bool items)
 			{
@@ -433,15 +480,15 @@ namespace SceneryEditorX::EditorVisibility
 					{
 						std::string airportId;
 						XPlane::AirportElementKind kind = XPlane::AirportElementKind::Airport;
-						uint32_t index = 0;
-						if (!ParseRowKey(key, airportId, kind, index))
+						uint32_t row = 0;
+						if (!ParseRowKey(key, airportId, kind, row))
 							return true;	// Damaged: dropped
 						if (!airportId.empty() && airportId == s.appliedAirport)
-							target = Target::ForElement(kind, index);
+							target = Target::ForElement(kind, row);
 					}
 					else if (key.starts_with(KEY_ENTITY) && EditorScene::GetRegistry())
 					{
-						if (const uint64_t entity = ResolveEntityKey(key, roots.Get(*EditorScene::GetRegistry())))
+						if (const uint64_t entity = ResolveEntityKey(key, index))
 						{
 							target = Target::ForEntity(entity);
 							s.entityKeys[entity] = key;
@@ -469,19 +516,19 @@ namespace SceneryEditorX::EditorVisibility
 			ProjectFile::ProjectDocument *document = EditorProjects::GetDocument();
 			if (!document)
 				return;
-			RootsCache roots;
+			KeyIndex index;
 			ProjectFile::ProjectViewState view;
 			for (const Target &target : s.hidden)
 			{
 				if (target.type == TargetType::ProjectItem && !document->FindItem(target.itemId))
 					continue;	// Deleted since
-				if (std::string key = KeyOf(s, target, roots); !key.empty())
+				if (std::string key = KeyOf(s, target, index); !key.empty())
 					view.hidden.push_back(std::move(key));
 			}
 			view.hidden.insert(view.hidden.end(), s.pendingHidden.begin(), s.pendingHidden.end());
 			for (const Target &target : s.locked)
 			{
-				if (std::string key = KeyOf(s, target, roots); !key.empty())
+				if (std::string key = KeyOf(s, target, index); !key.empty())
 					view.locked.push_back(std::move(key));
 			}
 			view.locked.insert(view.locked.end(), s.pendingLocked.begin(), s.pendingLocked.end());
@@ -829,12 +876,12 @@ namespace SceneryEditorX::EditorVisibility
 		if (changed.empty())
 			return;
 
-		RootsCache roots;
+		KeyIndex index;
 		for (const Target &target : changed)
 		{
 			Set(s.hidden, target, hidden);
 			if (hidden)
-				KeyOf(s, target, roots);	// An entity's key while it is there to name (no project open: no save does it)
+				KeyOf(s, target, index);	// An entity's key while it is there to name (no project open: no save does it)
 		}
 		Changed(s);
 		Save(s);
@@ -1008,7 +1055,7 @@ namespace SceneryEditorX::EditorVisibility
 	void SetLocked(EditorContext *, const std::vector<Target> &targets, const bool locked)
 	{
 		State &s = S();
-		RootsCache roots;
+		KeyIndex index;
 		std::vector<Target> changed;
 		bool items = false;
 		for (const Target &target : targets)
@@ -1028,7 +1075,7 @@ namespace SceneryEditorX::EditorVisibility
 			{
 				Set(s.locked, normalized, locked);
 				if (locked)
-					KeyOf(s, normalized, roots);	// An entity's key while it is there to name
+					KeyOf(s, normalized, index);	// An entity's key while it is there to name
 			}
 			changed.push_back(normalized);
 		}
@@ -1189,14 +1236,14 @@ namespace SceneryEditorX::EditorVisibility
 		const std::string airportId = airport ? airport->airport.id : std::string();
 		if (airportId != s.appliedAirport)
 		{
-			RootsCache roots;
-			const auto park = [&s, &roots](std::vector<Target> &targets, std::vector<std::string> &pending)
+			KeyIndex index;
+			const auto park = [&s, &index](std::vector<Target> &targets, std::vector<std::string> &pending)
 			{
-				std::erase_if(targets, [&s, &roots, &pending](const Target &target)
+				std::erase_if(targets, [&s, &index, &pending](const Target &target)
 				{
 					if (target.type != TargetType::AirportElement)
 						return false;
-					if (std::string key = KeyOf(s, target, roots); !key.empty())
+					if (std::string key = KeyOf(s, target, index); !key.empty())
 						pending.push_back(std::move(key));
 					return true;
 				});

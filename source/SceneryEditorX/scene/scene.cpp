@@ -39,6 +39,7 @@
 #include "components/lights.h"
 #include "components/wind.h"
 #include <algorithm>
+#include <atomic>
 #include <unordered_set>
 #include <filesystem>
 #include <Editor/modules/scene_render.h>

@@ -884,7 +884,22 @@ namespace SceneryEditorX::ToolsSelfTest
 							{
 								child.SetParent(parent);
 								Check(child.IsHiddenInTree(), "visibility: an entity parented under a hidden one is hidden too");
-								EditorScene::Destroy(EditorScene::GetID(static_cast<entt::entity>(child)));
+
+								// ...and shown again when it moves out from under it, off the hidden parent's list
+								Entity other = Scene::CreateEntity("Visibility self-test other parent");
+								if (other)
+								{
+									child.SetParent(other);
+									const UUID childId = child.GetUUID();
+									const std::vector<UUID> &left = parent.GetComponent<RelationshipComponent>().pChildren;
+									Check(!child.IsHiddenInTree() && std::ranges::find(left, childId) == left.end(),
+										"visibility: an entity moved out from under a hidden one is shown, and off its list");
+									EditorScene::Destroy(EditorScene::GetID(static_cast<entt::entity>(other)));	// Takes the child with it
+								}
+								else
+								{
+									EditorScene::Destroy(EditorScene::GetID(static_cast<entt::entity>(child)));
+								}
 							}
 						}
 

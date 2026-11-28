@@ -9,7 +9,7 @@ versions.
 
 ### Added
 
-- **Hide, isolate and lock** (0.2.120.621, issue #104; review follow-ups 0.2.121.622, 0.2.122.623). Each OUTLINER row has an eye and a lock toggle on its left;
+- **Hide, isolate and lock** (0.2.120.621, issue #104; review follow-ups 0.2.121.622, 0.2.122.623, 0.2.123.624). Each OUTLINER row has an eye and a lock toggle on its left;
   a drag down either column sets every row it crosses, as one undo step, and a hidden or locked row covers what is
   below it (shown with a dimmed icon). Hiding is view-only: hidden things aren't drawn, hovered, picked, box-selected
   or framed, and they are still exported. **Hide Selected**, **Hide Unselected** and **Show All** (<kbd>H</kbd> /
@@ -28,7 +28,8 @@ versions.
   (a new one) keeps what the view hides when it opens; undoing a hide or lock made in another project does nothing.
   For developers: `Entity::SetHidden` / `IsHiddenInTree` / `IsDrawn` (a view-only flag apart from the LOD /
   `ANIM_hide` active flag, kept on each entity and passed down to children, also when one is parented later:
-  `Scene::ParentChanged`; the renderer, GPU scene, lights and framing read it), `ProjectFile::ProjectViewState`
+  `Scene::ParentChanged`; the renderer, GPU scene, lights and framing read it; `Entity::SetParent` now also takes the
+  entity off its old parent's child list), `ProjectFile::ProjectViewState`
   (covered in `ProjectFormatTests`) and `Editor/core/editor_visibility.*`.
 
 - **Project Hub** (0.2.113.614). The editor starts on a window for choosing what to work on (after the first-launch

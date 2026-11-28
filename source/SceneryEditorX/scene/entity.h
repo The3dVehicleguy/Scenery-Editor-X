@@ -31,6 +31,7 @@
 // ReSharper disable CppInconsistentNaming
 #pragma once
 #include "scene.h"
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <string>
@@ -428,8 +429,16 @@ namespace SceneryEditorX
 		void SetParent(Entity parent)
 		{
 			auto& relationship = GetComponent<RelationshipComponent>();
+			// Off the old parent's list first: a stale entry would pass that parent's hidden state (and its destruction) on
+			if (static_cast<uint64_t>(relationship.pParentHandle) != 0)
+			{
+				if (Entity previous = Scene::TryGetEntityWithUUID(relationship.pParentHandle); previous && previous.m_EntityHandle != parent.m_EntityHandle)
+					std::erase(previous.GetComponent<RelationshipComponent>().pChildren, GetUUID());
+			}
 			relationship.pParentHandle = parent.GetUUID();
-			parent.GetComponent<RelationshipComponent>().pChildren.push_back(GetUUID());
+			std::vector<UUID> &siblings = parent.GetComponent<RelationshipComponent>().pChildren;
+			if (std::ranges::find(siblings, GetUUID()) == siblings.end())
+				siblings.push_back(GetUUID());
 			Scene::MarkStructureChanged();
 			Scene::ParentChanged(m_EntityHandle);
 		}
