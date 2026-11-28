@@ -125,6 +125,9 @@ namespace SceneryEditorX
 		/* @brief Queues an entity for every reader (Entity::SetActive, Renderable::SetFlag call it on a change). Any thread. */
 		static void MarkRenderStateChanged(entt::entity entity);
 
+		/* @brief How many live entities are hidden (Entity::SetHidden). While it is 0, Entity::IsHiddenInTree() walks no parents. */
+		static uint32_t GetHiddenEntityCount();
+
 		/* @brief Bumped only when an entity is destroyed: caches of Entity pointers revalidate when it moves. */
 		static uint64_t GetDestroyVersion();
 
@@ -252,6 +255,9 @@ namespace SceneryEditorX
 		 * @return The record, or nullptr for entt::null, another scene or a destroyed entity (the version differs).
 		 */
 		static EntityRuntime *FindRuntime(entt::entity handle, const Scene *scene);
+
+		/* @brief Entity::SetHidden's count of hidden entities (GetHiddenEntityCount). */
+		static void CountHiddenEntity(bool hidden);
 
 		static Ref<Camera> m_Camera;
 

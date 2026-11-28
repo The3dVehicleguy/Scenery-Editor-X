@@ -33,6 +33,7 @@
 #include <Editor/core/editor_theme.h>
 #include <Editor/core/editor_tools.h>
 #include <Editor/core/editor_ui.h>
+#include <Editor/core/editor_visibility.h>
 #include <Editor/core/editor_xplane.h>
 #include <Editor/core/facade_tool.h>
 #include <Editor/core/node_tool.h>
@@ -222,6 +223,8 @@ namespace SceneryEditorX
 
 				EditorTools::EndViewport(m_Context, view, canvasHovered, renderWidth, renderHeight);
 				DrawOverlay(camera, imageMin);
+				// While isolating: what is shown, and the way back
+				EditorVisibility::DrawViewportNotice(m_Context, imageMin.x + imageSize.x * 0.5f, imageMin.y + 8.0f * ImGui::GetStyle().FontScaleDpi);
 			}
 		}
 		EditorUI::EndPanel();

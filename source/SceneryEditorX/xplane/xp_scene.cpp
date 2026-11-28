@@ -1207,8 +1207,9 @@ namespace SceneryEditorX::XPlane
 			else
 				ResolveEntities(*registry, rootHandle, object); // the lights (and drapes) below use the entity pointers
 
-			// Lights: billboards and spill candidates
-			CollectObjectLights(*registry, rootHandle, object, lights, parentCache);
+			// Lights: billboards and spill candidates (none from a placement hidden in the editor's view)
+			if (!Entity(rootHandle, Scene::GetActive()).IsHiddenInTree())
+				CollectObjectLights(*registry, rootHandle, object, lights, parentCache);
 		}
 		Perf::SetCounter("anim groups posed", s_GroupsPosed);
 		Perf::SetCounter("anim groups moved", s_GroupsMoved);

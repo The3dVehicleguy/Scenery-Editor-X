@@ -70,6 +70,7 @@ namespace SceneryEditorX
 	static uint64_t s_StructureVersion = 1;            // see Scene::GetStructureVersion()
 	static uint64_t s_EntityListsVersion = 0;          // structure version the cached lists were built at
 	static uint64_t s_DestroyVersion = 1;              // see Scene::GetDestroyVersion()
+	static std::atomic<uint32_t> s_HiddenEntityCount = 0; // see Scene::GetHiddenEntityCount() (read by render passes)
 	static std::vector<EntityRuntime*> s_DestroyedEntities; // destroyed, still listed in s_EntityPointers (CompactEntityPointers)
 	static BoundingBox s_BoundingBox = BoundingBox::UNIT;
 	static std::string s_FilePath;
@@ -391,9 +392,11 @@ namespace SceneryEditorX
 				EntityRuntime &runtime = s_RuntimeChunks[chunk][i];
 				runtime.components = {};
 				runtime.entity.m_EntityHandle = entt::null;
+				runtime.hidden = false;
 				s_FreeRuntimes.push_back(&runtime);
 			}
 		}
+		s_HiddenEntityCount = 0;
 		s_RenderableEntities.clear();
 		s_LightEntities.clear();
 		s_RenderableMaterials.clear();
@@ -589,6 +592,19 @@ namespace SceneryEditorX
 		return s_DestroyVersion;
 	}
 
+	uint32_t Scene::GetHiddenEntityCount()
+	{
+		return s_HiddenEntityCount.load(std::memory_order_relaxed);
+	}
+
+	void Scene::CountHiddenEntity(const bool hidden)
+	{
+		if (hidden)
+			s_HiddenEntityCount.fetch_add(1, std::memory_order_relaxed);
+		else if (s_HiddenEntityCount.load(std::memory_order_relaxed) > 0)
+			s_HiddenEntityCount.fetch_sub(1, std::memory_order_relaxed);
+	}
+
 	bool Scene::SaveToFile(std::string filePath)
 	{
 		if (filePath.empty())
@@ -696,6 +712,11 @@ namespace SceneryEditorX
 		// has left s_EntityPointers.
 		if (EntityRuntime *runtime = FindRuntime(entityHandle, s_ActiveScene.get()))
 		{
+			if (runtime->hidden)
+			{
+				runtime->hidden = false;
+				CountHiddenEntity(false);
+			}
 			runtime->components = {};
 			runtime->entity.m_EntityHandle = entt::null;
 			s_RuntimeByIndex[RuntimeIndex(entityHandle)] = nullptr;

@@ -85,7 +85,7 @@ The dependency-light, cross-platform Catch2 unit suites that only need `source/`
   reader/writer (determinism, git-friendly layout, the documented legacy layout), the `.sex` binary format
   (checksums, damage / truncation / CRLF detection, fuzzing, the encode cache), the XML DOM, WorldEditor
   `earth.wed.xml` import/export (`docs/XCoder/earth.wed.xml`), atomic writes, the project cache (snapshots,
-  recovery, backups), `ProjectDocument` open/edit/save/close, the project -> DSF conversion the editor draws
+  recovery, backups), `ProjectDocument` open/edit/save/close, the editor's saved hide / lock state (`ProjectViewState`), the project -> DSF conversion the editor draws
   through the overlay builder, road networks (road node and road items through .edX / .sex / WED_RoadNode +
   WED_RoadEdge, junctions kept on their nodes, DSF segments with shared junction ids), a DSF's placements brought back
   as items (`DsfImportTests.cpp`: `ImportDsfItems` in `project/project_dsf.*`, every kind and layout round trips through

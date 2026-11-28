@@ -293,7 +293,7 @@ namespace SceneryEditorX
 				list.entryOf[index] = static_cast<uint32_t>(list.entities.size());
 				list.entities.push_back(entity);
 				list.handles.push_back(handle);
-				list.active.push_back(entity->GetActive() ? 1 : 0);
+				list.active.push_back(entity->IsDrawn() ? 1 : 0);
 			}
 
 			list.structureVersion = Scene::GetStructureVersion();
@@ -320,7 +320,7 @@ namespace SceneryEditorX
 			else if (!incremental)
 			{
 				for (size_t i = 0; i < list.entities.size(); ++i)
-					list.active[i] = list.entities[i]->GetActive() ? 1 : 0;
+					list.active[i] = list.entities[i]->IsDrawn() ? 1 : 0;
 				activeChanged = true;
 			}
 			else
@@ -331,7 +331,7 @@ namespace SceneryEditorX
 					const uint32_t entry = index < list.entryOf.size() ? list.entryOf[index] : UINT32_MAX;
 					if (entry == UINT32_MAX || list.handles[entry] != handle)
 						continue;
-					const uint8_t active = list.entities[entry]->GetActive() ? 1 : 0;
+					const uint8_t active = list.entities[entry]->IsDrawn() ? 1 : 0;
 					activeChanged |= active != list.active[entry];
 					list.active[entry] = active;
 				}
@@ -3654,7 +3654,7 @@ namespace SceneryEditorX
 
 				// slot 0 is always the sun, even if disabled
 				fill_light(lightComponent);
-				if (!lightComponent->GetEntity()->GetActive())
+				if (!lightComponent->GetEntity()->IsDrawn())
 					m_Bindless_Lights[0].intensity = 0.0f;
 
 				break;
@@ -3671,7 +3671,7 @@ namespace SceneryEditorX
 	
 				lightComponent->SetIndex(std::numeric_limits<uint32_t>::max());
 	
-				if (!lightComponent->GetEntity()->GetActive())
+				if (!lightComponent->GetEntity()->IsDrawn())
 					continue;
 	
 				if (lightComponent->GetIntensityWatt() <= 0.0f)

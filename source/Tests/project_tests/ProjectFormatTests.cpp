@@ -867,6 +867,58 @@ TEST_CASE("Saved library filters round trip in .edX and .sex, and stay out until
 	CHECK(old.libraryFilters.empty());
 }
 
+TEST_CASE("The view's hide and lock state round trips in .edX and .sex, and stays out until there is some", "[project][edx][sex][view]")
+{
+	SceneryProject project = MakeSampleProject();
+	const std::string withoutView = WriteEdx(project);
+	CHECK(withoutView.find("\"View\"") == std::string::npos);	// Projects without any stay byte-identical
+	const std::string bytesWithoutView = WriteSex(project);
+	std::vector<SexChunkInfo> chunks;
+	REQUIRE(ReadSexChunkTable(bytesWithoutView.data(), bytesWithoutView.size(), chunks));
+	CHECK(std::ranges::none_of(chunks, [](const SexChunkInfo &chunk) { return chunk.tag == "VIEW"; }));
+
+	project.view.hidden = { "item/3f9a0c41d2b7", "row/KHVN/runway/0", "entity/Terrain scenery KHVN" };
+	project.view.locked = { "row/KHVN/group/12", "entity/traffic_cone_2#4" };
+
+	const std::string text = WriteEdx(project);
+	CHECK(text.find("\"View\"") != std::string::npos);
+	SceneryProject read;
+	std::vector<std::string> warnings;
+	std::string error;
+	REQUIRE(ParseEdx(text, read, &warnings, &error));
+	CHECK(warnings.empty());
+	CHECK(read.view == project.view);
+	CHECK(WriteEdx(read) == text);
+
+	// Only hidden things: the locked list is left out
+	SceneryProject hiddenOnly = MakeSampleProject();
+	hiddenOnly.view.hidden = { "item/3f9a0c41d2b7" };
+	const std::string hiddenText = WriteEdx(hiddenOnly);
+	const size_t viewAt = hiddenText.find("\"View\"");
+	REQUIRE(viewAt != std::string::npos);
+	const std::string viewSection = hiddenText.substr(viewAt, hiddenText.find('}', viewAt) - viewAt);
+	CHECK(viewSection.find("\"hidden\"") != std::string::npos);
+	CHECK(viewSection.find("\"locked\"") == std::string::npos);
+	SceneryProject hiddenRead;
+	REQUIRE(ParseEdx(hiddenText, hiddenRead, &warnings, &error));
+	CHECK(hiddenRead.view == hiddenOnly.view);
+
+	const std::string bytes = WriteSex(project);
+	SceneryProject binary;
+	REQUIRE(ParseSex(bytes.data(), bytes.size(), binary, &warnings, &error));
+	CHECK(binary.view == project.view);
+	REQUIRE(ReadSexChunkTable(bytes.data(), bytes.size(), chunks));
+	CHECK(std::ranges::any_of(chunks, [](const SexChunkInfo &chunk) { return chunk.tag == "VIEW"; }));
+
+	// Files from before the view state existed still load, with everything shown and unlocked
+	SceneryProject old;
+	REQUIRE(ParseEdx(withoutView, old, &warnings, &error));
+	CHECK(old.view.IsEmpty());
+	SceneryProject oldBinary;
+	REQUIRE(ParseSex(bytesWithoutView.data(), bytesWithoutView.size(), oldBinary, &warnings, &error));
+	CHECK(oldBinary.view.IsEmpty());
+}
+
 TEST_CASE(".sex detects damage instead of loading garbage", "[project][sex]")
 {
 	const std::string bytes = WriteSex(MakeSampleProject());

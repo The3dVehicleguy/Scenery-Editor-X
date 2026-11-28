@@ -65,6 +65,71 @@ namespace SceneryEditorX
 	{
 	}
 
+	void Entity::SetHidden(const bool hidden)
+	{
+		EntityRuntime *runtime = GetRuntime();
+		if (!runtime || runtime->hidden == hidden)
+			return;
+		runtime->hidden = hidden;
+		Scene::CountHiddenEntity(hidden);
+
+		// The entity and everything below it draw differently now: each render-state reader re-reads them
+		const entt::registry *registry = GetRegistry();
+		if (!registry || !m_Scene)
+		{
+			Scene::MarkRenderStateChanged(m_EntityHandle);
+			return;
+		}
+		std::vector<entt::entity> stack = { m_EntityHandle };
+		constexpr size_t LIMIT = 4'000'000; // guards against relationship cycles
+		for (size_t visited = 0; !stack.empty() && visited < LIMIT; ++visited)
+		{
+			const entt::entity handle = stack.back();
+			stack.pop_back();
+			Scene::MarkRenderStateChanged(handle);
+			const RelationshipComponent *relationship = registry->try_get<RelationshipComponent>(handle);
+			if (!relationship)
+				continue;
+			for (const UUID &child : relationship->pChildren)
+			{
+				const auto it = m_Scene->m_EntityMap.find(child);
+				if (it != m_Scene->m_EntityMap.end() && registry->valid(it->second))
+					stack.push_back(it->second);
+			}
+		}
+	}
+
+	bool Entity::IsHiddenInTree() const
+	{
+		if (Scene::GetHiddenEntityCount() == 0)
+			return false;
+		if (const EntityRuntime *runtime = GetRuntime(); runtime && runtime->hidden)
+			return true;
+
+		const entt::registry *registry = GetRegistry();
+		if (!registry || !m_Scene)
+			return false;
+
+		// Up the parents by registry handle, as GetMatrix() does
+		entt::entity handle = m_EntityHandle;
+		constexpr uint32_t maxDepth = 64; // guards against relationship cycles
+		for (uint32_t depth = 0; depth < maxDepth; ++depth)
+		{
+			const RelationshipComponent *relationship = registry->try_get<RelationshipComponent>(handle);
+			if (!relationship || static_cast<uint64_t>(relationship->pParentHandle) == 0)
+				return false;
+
+			const auto it = m_Scene->m_EntityMap.find(relationship->pParentHandle);
+			if (it == m_Scene->m_EntityMap.end() || !registry->valid(it->second))
+				return false;
+
+			handle = it->second;
+			if (const EntityRuntime *parent = Scene::FindRuntime(handle, m_Scene); parent && parent->hidden)
+				return true;
+		}
+		return false;
+	}
+
 	xMath::Matrix Entity::ComposeLocalMatrix(const TransformComponent &transformComponent)
 	{
 		const TransformComponent *transform = &transformComponent;

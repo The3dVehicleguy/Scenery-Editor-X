@@ -46,6 +46,7 @@ namespace SceneryEditorX::ProjectFile
 		constexpr const char *TAG_LIBRARY = "LIBR";
 		constexpr const char *TAG_ENVIRONMENT = "ENVR";
 		constexpr const char *TAG_LIBRARY_FILTERS = "LFLT";
+		constexpr const char *TAG_VIEW = "VIEW";
 
 		constexpr uint32_t CHUNK_VERSION = 1;
 
@@ -170,6 +171,8 @@ namespace SceneryEditorX::ProjectFile
 			chunks.push_back({ TAG_ENVIRONMENT, Encode(*project.environment) });
 		if (!project.libraryFilters.empty())
 			chunks.push_back({ TAG_LIBRARY_FILTERS, Encode(project.libraryFilters) });
+		if (!project.view.IsEmpty())
+			chunks.push_back({ TAG_VIEW, Encode(project.view) });
 		for (const SexExtraChunk &extra : options.extraChunks)
 			chunks.push_back({ extra.tag, extra.bytes });
 
@@ -350,6 +353,12 @@ namespace SceneryEditorX::ProjectFile
 				decoded = Decode(payload, out.libraryFilters, decodeError);
 				if (!decoded)
 					out.libraryFilters.clear();
+			}
+			else if (chunk.tag == TAG_VIEW)
+			{
+				decoded = Decode(payload, out.view, decodeError);
+				if (!decoded)
+					out.view = {};
 			}
 			// Other tags: extra data (cache stamps) or chunks from a newer editor
 

@@ -35,6 +35,7 @@
 #include "editor_project.h"
 #include "editor_selection.h"
 #include "editor_ui.h"
+#include "editor_visibility.h"
 #include "transform_tool.h"
 #include <algorithm>
 #include <cmath>
@@ -278,6 +279,9 @@ namespace SceneryEditorX::NodeTool
 
 		std::optional<Session> Open(const Target &target)
 		{
+			// Locked (itself or below something locked): no nodes to edit
+			if (EditorVisibility::IsLocked(target))
+				return std::nullopt;
 			Session session;
 			session.target = target;
 			if (target.type == TargetType::AirportElement)

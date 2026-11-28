@@ -82,8 +82,29 @@ namespace SceneryEditorX
 		void SetActive(bool active);
 
 		/**
-		 * @brief 
-		 * @return 
+		 * @brief Whether the entity itself is hidden in the editor's view (SetHidden). Apart from the active flag, which
+		 * LOD switching and ANIM_hide keep changing. A hidden parent hides its children too: see IsHiddenInTree().
+		 */
+		[[nodiscard]] bool IsHidden() const;
+
+		/**
+		 * @brief Hides or shows the entity, and with it everything below it, in the view (the editor's hide / isolate),
+		 * without touching the active flag. The renderer, the GPU scene, the lights and framing skip what is hidden. The
+		 * change reaches the per-frame passes through Scene::MarkRenderStateChanged() for the entity and each descendant.
+		 * Main thread.
+		 * @param hidden New state.
+		 */
+		void SetHidden(bool hidden);
+
+		/* @brief Hidden itself or below a hidden parent. Costs nothing while no entity is hidden (Scene::GetHiddenEntityCount). */
+		[[nodiscard]] bool IsHiddenInTree() const;
+
+		/* @brief Active and not hidden in the tree: whether the renderer draws the entity (and lights it, for a light). */
+		[[nodiscard]] bool IsDrawn() const { return GetActive() && !IsHiddenInTree(); }
+
+		/**
+		 * @brief
+		 * @return
 		 */
 		[[nodiscard]] bool IsValid() const;
 
@@ -835,6 +856,7 @@ namespace SceneryEditorX
 		bool hasMatrixPrevious = false;
 
 		bool active = true; // SetActive(); read by the renderer when collecting draw calls
+		bool hidden = false; // SetHidden(): the editor's view-only hide, which children inherit (IsHiddenInTree)
 		float timeSinceLastTransform = 0.0f; // Used for editor gizmo display and other transform-related time tracking (time in seconds)
 	};
 
@@ -868,6 +890,12 @@ namespace SceneryEditorX
 	{
 		const EntityRuntime *runtime = GetRuntime();
 		return runtime && runtime->active;
+	}
+
+	inline bool Entity::IsHidden() const
+	{
+		const EntityRuntime *runtime = GetRuntime();
+		return runtime && runtime->hidden;
 	}
 
 	inline void Entity::SetActive(const bool active)

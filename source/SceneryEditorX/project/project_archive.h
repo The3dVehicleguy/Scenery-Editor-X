@@ -132,6 +132,12 @@ namespace SceneryEditorX::ProjectFile
 		a.FieldIf("only-missing", v.onlyMissing, false);
 	}
 
+	template<typename A> void Visit(A &a, ProjectViewState &v)
+	{
+		a.FieldIf("hidden", v.hidden, std::vector<std::string>());
+		a.FieldIf("locked", v.locked, std::vector<std::string>());
+	}
+
 	template<typename A> void Visit(A &a, LibraryReference &v)
 	{
 		a.Field("Library", v.name);
