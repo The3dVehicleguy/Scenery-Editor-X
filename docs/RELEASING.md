@@ -135,7 +135,7 @@ The editor checks a downloaded setup against the SHA-256 published with the same
 `digest` of the file, else `<setup>.sha256` or `SHA256SUMS.txt`. That catches a damaged, truncated or swapped download,
 but it can't tell a release made by this workflow from one made by someone who got write access to the repository:
 whoever can replace the setup can replace the checksum files too, and GitHub's digest simply describes whatever file was
-uploaded. Requests may only be redirected to GitHub (`github.com`, `api.github.com`, `*.githubusercontent.com`), which
+uploaded. Requests may only be redirected to GitHub (`github.com`, `api.github.com`, `*.githubusercontent.com` apart from the hosts serving what any user publishes), which
 keeps downloads on GitHub's hosts but doesn't change this. The setup isn't
 code-signed (no Authenticode certificate yet), so nothing else vouches for it either, and Windows SmartScreen may warn
 about it. What protects users is who can publish: keep write access to the repository small, restrict who can push

@@ -3,7 +3,8 @@
 # They need only the standard library and the json, Catch2 and libconfig submodules; the editor itself needs a GPU and
 # isn't built here. scripts/ci/build_unit_tests.sh does the work, so a failing job can be repeated locally with the
 # same command. Each job uploads its Catch2 JUnit reports and writes a per-suite table to the run summary. Each job
-# also runs cmake/tests/triplet_detection.cmake, which checks the vcpkg triplet a plain configure picks.
+# also compiles the editor sources the suites can't build because they need libcurl (scripts/ci/compile_check.sh: the
+# update client), and runs cmake/tests/triplet_detection.cmake, which checks the vcpkg triplet a plain configure picks.
 # The release workflow (release.yml) calls it too: a release is only published when every platform passes.
 name: Unit tests
 
@@ -81,7 +82,7 @@ jobs:
         shell: pwsh
         run: |
           $bash = 'C:\msys64\usr\bin\bash.exe'
-          $install = 'pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja'
+          $install = 'pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-curl'
           & $bash -lc $install
           if ($LASTEXITCODE -ne 0) {
             Write-Host 'Installing from the image database failed: updating MSYS2, then installing again'
@@ -94,6 +95,20 @@ jobs:
 
       - name: Build and run the suites
         run: bash scripts/ci/build_unit_tests.sh
+
+      # libcurl's headers for the compile check (macOS has them in its SDK, Windows from the MSYS2 step above)
+      - name: libcurl headers
+        if: runner.os == 'Linux' && !cancelled()
+        run: |
+          if ! echo '#include <curl/curl.h>' | g++ -E -x c++ - > /dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends libcurl4-openssl-dev
+          fi
+
+      # The editor sources the suites can't build, compiled with this platform's compiler: their per-OS code
+      - name: Compile check
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/compile_check.sh
 
       # The vcpkg triplet a configure picks when nothing sets one (cmake/detect-platform-compiler.cmake); CMake only
       - name: Triplet detection

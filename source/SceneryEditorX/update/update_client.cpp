@@ -29,8 +29,11 @@
  * -------------------------------------------------------
  */
 #include "update_client.h"
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstddef>
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <mutex>
@@ -648,6 +651,129 @@ namespace SceneryEditorX::Update
 			return {};
 		}
 
+		/**
+		 * @brief The file a setup downloads into (<setup>.part). On Windows it is held for the whole download: others may
+		 * read it but not write, rename or delete it, and MoveTo gives it its final name through the same handle, so
+		 * nothing can change or swap it between the download and the name the lock (HashAndLock) then opens. Elsewhere a
+		 * plain file and rename (those builds don't run setups).
+		 */
+		class PartialDownload
+		{
+		public:
+			explicit PartialDownload(fs::path path) : m_Path(std::move(path)) {}
+			~PartialDownload() { Close(); }
+			PartialDownload(const PartialDownload &) = delete;
+			PartialDownload &operator=(const PartialDownload &) = delete;
+
+			bool Open(std::string &error)
+			{
+#if defined(_WIN32)
+				// DELETE: renamed through this handle (MoveTo)
+				const HANDLE file = CreateFileW(m_Path.c_str(), GENERIC_WRITE | DELETE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS,
+					FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+				if (file == INVALID_HANDLE_VALUE)
+				{
+					error = "could not write " + VFS::ToUtf8(m_Path) + " (Windows error " + std::to_string(GetLastError()) + ")";
+					return false;
+				}
+				m_File = file;
+#else
+				m_File.open(m_Path, std::ios::binary | std::ios::trunc);
+				if (!m_File)
+				{
+					error = "could not write " + VFS::ToUtf8(m_Path);
+					return false;
+				}
+#endif
+				return true;
+			}
+
+			bool Write(const char *data, std::size_t size)
+			{
+#if defined(_WIN32)
+				while (size > 0 && m_Ok)
+				{
+					DWORD written = 0;
+					const DWORD chunk = static_cast<DWORD>(std::min<std::size_t>(size, 1u << 30));
+					m_Ok = WriteFile(m_File, data, chunk, &written, nullptr) && written > 0;
+					data += written;
+					size -= written;
+				}
+#else
+				m_File.write(data, static_cast<std::streamsize>(size));
+				m_Ok = m_Ok && static_cast<bool>(m_File);
+#endif
+				return m_Ok;
+			}
+
+			bool Ok() const { return m_Ok; }
+
+			/* @brief Gives the finished download its final name, replacing the file there, and closes it. */
+			bool MoveTo(const fs::path &target, std::string &error)
+			{
+#if defined(_WIN32)
+				const std::wstring name = target.wstring();
+				std::vector<std::byte> buffer(sizeof(FILE_RENAME_INFO) + (name.size() + 1) * sizeof(wchar_t));
+				auto *info = reinterpret_cast<FILE_RENAME_INFO *>(buffer.data());
+				info->ReplaceIfExists = TRUE;
+				info->RootDirectory = nullptr;
+				info->FileNameLength = static_cast<DWORD>(name.size() * sizeof(wchar_t));
+				std::memcpy(info->FileName, name.c_str(), (name.size() + 1) * sizeof(wchar_t));
+				if (!SetFileInformationByHandle(m_File, FileRenameInfo, info, static_cast<DWORD>(buffer.size())))
+				{
+					error = "Windows error " + std::to_string(GetLastError());
+					return false;
+				}
+				Close();
+#else
+				m_File.close();
+				if (!m_File)
+				{
+					error = "could not write " + VFS::ToUtf8(m_Path);
+					return false;
+				}
+				// Replaces the file there in one step (POSIX rename), so a failed move leaves it as it was
+				std::error_code ec;
+				fs::rename(m_Path, target, ec);
+				if (ec)
+				{
+					error = ec.message();
+					return false;
+				}
+#endif
+				return true;
+			}
+
+			/* @brief Closes and deletes an unfinished, failed or unmovable download. */
+			void Discard()
+			{
+				Close();
+				std::error_code ec;
+				fs::remove(m_Path, ec);
+			}
+
+		private:
+			void Close()
+			{
+#if defined(_WIN32)
+				if (m_File != INVALID_HANDLE_VALUE)
+					CloseHandle(m_File);
+				m_File = INVALID_HANDLE_VALUE;
+#else
+				if (m_File.is_open())
+					m_File.close();
+#endif
+			}
+
+			fs::path m_Path;
+#if defined(_WIN32)
+			HANDLE m_File = INVALID_HANDLE_VALUE;
+#else
+			std::ofstream m_File;
+#endif
+			bool m_Ok = true;
+		};
+
 		void RunDownload(const Release release, const ReleaseAsset installer)
 		{
 			ClientState &s = S();
@@ -738,45 +864,41 @@ namespace SceneryEditorX::Update
 			fs::path partial = target;
 			partial += ".part";
 			{
-				std::ofstream file(partial, std::ios::binary | std::ios::trunc);
-				if (!file)
+				PartialDownload file(partial);
+				if (!file.Open(error))
 				{
-					fail("could not write " + VFS::ToUtf8(partial));
+					fail(error);
 					return;
 				}
 				Transfer transfer;
 				transfer.limit = installer.size > 0 ? installer.size + (1u << 20) : MAX_INSTALLER_BYTES;
 				transfer.reportProgress = true;
-				transfer.sink = [&file](const char *data, const std::size_t size)
-				{
-					file.write(data, static_cast<std::streamsize>(size));
-					return static_cast<bool>(file);
-				};
+				transfer.sink = [&file](const char *data, const std::size_t size) { return file.Write(data, size); };
 				s.downloaded.store(0);
 				s.total.store(installer.size);
 				SEDX_CORE_INFO_TAG(LOG_TAG, "Downloading {} ({} MB)", installer.name, installer.size / (1024 * 1024));
 				const HttpResult result = HttpGet(installer.downloadUrl, false, transfer, testServer);
-				file.close();
 
-				const bool ok = result.transferred && result.status >= 200 && result.status < 300 && file;
+				const bool ok = result.transferred && result.status >= 200 && result.status < 300 && file.Ok();
 				if (!ok)
 				{
-					fs::remove(partial, ec);
+					file.Discard();
 					if (result.cancelled)
 						cancelled();
+					else if (!file.Ok())
+						fail("could not write " + VFS::ToUtf8(partial));
 					else
 						fail(result.transferred ? DescribeStatus(result.status, false) : result.error);
 					return;
 				}
-			}
-
-			fs::remove(target, ec);
-			fs::rename(partial, target, ec);
-			if (ec)
-			{
-				fs::remove(partial, ec);
-				fail("could not move the download into place: " + ec.message());
-				return;
+				// Renamed over the file there (one that didn't match its SHA-256), never deleted first: a failed move leaves
+				// it as it was
+				if (!file.MoveTo(target, error))
+				{
+					file.Discard();
+					fail("could not move the download into place: " + error);
+					return;
+				}
 			}
 
 			std::string actual;

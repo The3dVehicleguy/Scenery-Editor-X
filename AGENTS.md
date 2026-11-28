@@ -324,7 +324,10 @@ MinGW (MSYS2) has no `fsync`, which libconfig's `wincompat.h` maps its `posix_fs
 and MSYS2 g++ on Windows; it leaves out `[xplane-install]` / `[library-sweep]` cases. The **Unit tests** workflow
 (`.github/workflows/unit-tests.yml`) runs it on ubuntu-latest, macos-latest and windows-latest for pull requests into
 `dev` and pushes to `dev` / `master`. When a suite gains an engine source, add it to the script's list as well as to the
-recipe above (test files are picked up from the suite's folder). `SEDX_TEST_CXXFLAGS=-DSEDX_FLOAT_CHARS_FALLBACK
+recipe above (test files are picked up from the suite's folder). The same jobs then run `scripts/ci/compile_check.sh`:
+editor sources the suites can't build because they need a library (`update/update_client.cpp`, libcurl) are compiled,
+not linked, with each platform's compiler and its own libcurl headers, the logger replaced by `scripts/ci/stubs`. Add a
+source there when it has per-OS code and needs only such a library. `SEDX_TEST_CXXFLAGS=-DSEDX_FLOAT_CHARS_FALLBACK
 SEDX_TEST_OUT=build/unit-tests-fallback` runs every suite on the float text fallback the macOS build uses.
 The same workflow runs `cmake -P cmake/tests/triplet_detection.cmake` (CMake only, no compiler or vcpkg): the vcpkg
 triplet `cmake/detect-platform-compiler.cmake` picks when neither the user nor a preset sets one, for each host,
