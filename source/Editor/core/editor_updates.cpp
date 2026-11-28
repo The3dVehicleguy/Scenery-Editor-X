@@ -461,8 +461,12 @@ namespace SceneryEditorX::EditorUpdates
 		if (!s.initialized)
 			return;
 
+		// Until the check starts, or the startup check (which goes on from reading its cache) answers it instead
 		if (s.retryCheck)
-			s.retryCheck = !UpdateClient::Check(true);
+		{
+			const UpdateState state = UpdateClient::GetStatus().state;	// A copy per frame, only while waiting
+			s.retryCheck = state != UpdateState::Checking && state != UpdateState::Downloading && !UpdateClient::Check(true);
+		}
 
 		if (s.automatic && !s.started)
 		{
@@ -602,8 +606,8 @@ namespace SceneryEditorX::EditorUpdates
 			return;
 		State &s = S();
 		s.launchError.clear();
-		// Refused while something runs: a download keeps going (the window shows it); anything else is only the startup
-		// check reading its cache for a moment, so ask again next frame instead of silently doing nothing
+		// Refused while something runs: a download keeps going and a check answers this one (the window shows either);
+		// otherwise it is the startup check reading its cache for a moment, so ask again on the next frames (Tick)
 		if (!UpdateClient::Check(true))
 		{
 			const UpdateState state = UpdateClient::GetStatus().state;

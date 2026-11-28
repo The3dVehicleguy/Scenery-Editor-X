@@ -323,6 +323,22 @@ TEST_CASE("Only a newer release is offered, unless it was skipped", "[update][of
 	CHECK(Evaluate(running, latest, "") == Offer::None);			// Pre-releases are never offered
 }
 
+TEST_CASE("A relative redirect stays on the same origin", "[update][url]")
+{
+	CHECK(SameOrigin("https://example.com/latest.json", "https://example.com/other?x=1"));
+	CHECK(SameOrigin("HTTPS://Example.COM:8443/a", "https://example.com:8443"));
+	CHECK(SameOrigin("http://127.0.0.1:8765/newer.json", "http://127.0.0.1:8765/files/a.exe"));
+	CHECK(SameOrigin("https://example.com#a", "https://example.com/b"));
+	CHECK_FALSE(SameOrigin("https://example.com/a", "http://example.com/a"));
+	CHECK_FALSE(SameOrigin("https://example.com/a", "https://example.com:8443/a"));
+	CHECK_FALSE(SameOrigin("https://example.com/a", "https://example.com.evil.example/a"));
+	CHECK_FALSE(SameOrigin("https://example.com/a", "https://example.com@evil.example/a"));
+	CHECK_FALSE(SameOrigin("https://example.com/a", "https://evil.example/https://example.com"));
+	CHECK_FALSE(SameOrigin("example.com/a", "example.com/a"));
+	CHECK_FALSE(SameOrigin("", ""));
+	CHECK_FALSE(SameOrigin("://x", "://x"));
+}
+
 TEST_CASE("Requests are only redirected to GitHub", "[update][url]")
 {
 	for (const char *ok : { "https://github.com/x/y/releases/download/v1/a.exe", "https://api.github.com/repos/x/y/releases/latest",

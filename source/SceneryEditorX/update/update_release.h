@@ -145,6 +145,12 @@ namespace SceneryEditorX::Update
 	bool IsAllowedRedirect(std::string_view url, bool testServer);
 
 	/**
+	 * @brief Whether two URLs have the same scheme and authority (host, port, any user name), letter case aside: a
+	 * relative redirect stays there. Empty for anything without "://".
+	 */
+	bool SameOrigin(std::string_view a, std::string_view b);
+
+	/**
 	 * @brief Whether the automatic check is due: never checked (lastCheck 0), the clock went back past the last
 	 * check, or interval seconds have passed since it.
 	 */

@@ -162,6 +162,7 @@ namespace SceneryEditorX::Update
 			bool tooLarge = false;
 			bool reportProgress = false;
 			long timeoutSeconds = 0;	// Whole transfer; 0 for none (a setup may take long on a slow line)
+			CURL *handle = nullptr;		// Set by HttpGet: Progress asks it for the response's status
 		};
 
 		std::size_t WriteData(const char *data, const std::size_t size, const std::size_t count, void *userdata)
@@ -224,9 +225,16 @@ namespace SceneryEditorX::Update
 				return 1;	// Aborts the transfer
 			if (transfer->reportProgress)
 			{
-				s.downloaded.store(downloadNow > 0 ? static_cast<std::uint64_t>(downloadNow) : 0);
-				if (downloadTotal > 0)
-					s.total.store(static_cast<std::uint64_t>(downloadTotal));
+				// Only the file's own answer: GitHub's release files answer with a redirect first, whose small body
+				// would show as the whole download for a moment
+				long status = 0;
+				curl_easy_getinfo(transfer->handle, CURLINFO_RESPONSE_CODE, &status);
+				if (status >= 200 && status < 300)
+				{
+					s.downloaded.store(downloadNow > 0 ? static_cast<std::uint64_t>(downloadNow) : 0);
+					if (downloadTotal > 0)
+						s.total.store(static_cast<std::uint64_t>(downloadTotal));
+				}
 			}
 			return 0;
 		}
@@ -241,6 +249,7 @@ namespace SceneryEditorX::Update
 				return result;
 			}
 
+			transfer.handle = curl;
 			curl_slist *headers = nullptr;
 			if (api)
 			{
@@ -289,8 +298,16 @@ namespace SceneryEditorX::Update
 
 			const CURLcode code = curl_easy_perform(curl);
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &result.status);
+			// Where the transfer ended, whatever headers led there: the same rule as CheckHeader's, checked again on
+			// the answer itself, so it doesn't rest on reading every Location header
+			std::string finalUrl;
+			if (char *effective = nullptr; curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective) == CURLE_OK && effective)
+				finalUrl = effective;
 			curl_easy_cleanup(curl);
+			transfer.handle = nullptr;
 			curl_slist_free_all(headers);
+			const bool finalAllowed = finalUrl.empty() || finalUrl == url || SameOrigin(finalUrl, url) ||
+				IsAllowedRedirect(finalUrl, testServer);
 
 			result.tooLarge = transfer.tooLarge;
 			if (code == CURLE_ABORTED_BY_CALLBACK)
@@ -301,6 +318,8 @@ namespace SceneryEditorX::Update
 				result.error = "the answer was larger than expected";
 			else if (code != CURLE_OK)
 				result.error = errorBuffer[0] ? errorBuffer : curl_easy_strerror(code);
+			else if (!finalAllowed)
+				result.error = "redirected away from GitHub, to " + finalUrl;	// The answer is dropped: not transferred
 			else
 				result.transferred = true;
 			return result;
@@ -401,11 +420,15 @@ namespace SceneryEditorX::Update
 		// -------------------------------------------------------
 		// Work (on the client's thread)
 
-		/* @brief Runs work on the client's thread unless something is running already; begin() runs first, here. */
-		bool StartWork(const std::function<void()> &begin, std::function<void()> work)
+		/**
+		 * @brief Runs work on the client's thread unless something is running already; begin() runs first, here.
+		 * holdsBusy: the caller has taken the busy guard itself (CheckIfDue), so nothing could start in between; it
+		 * stays taken for the work, or is released when the work can't start.
+		 */
+		bool StartWork(const std::function<void()> &begin, std::function<void()> work, const bool holdsBusy = false)
 		{
 			ClientState &s = S();
-			if (!s.initialized.load() || s.busy.exchange(true))
+			if (!holdsBusy && (!s.initialized.load() || s.busy.exchange(true)))
 				return false;
 			std::scoped_lock lock(s.workerMutex);
 			if (!s.initialized.load())
@@ -1022,18 +1045,27 @@ namespace SceneryEditorX::Update
 		return version;
 	}
 
+	namespace
+	{
+		/* @brief Announces a check (Checking) and runs it on the client's thread (StartWork, holdsBusy as there). */
+		bool StartCheck(const bool manual, const bool holdsBusy)
+		{
+			const auto begin = [manual]()
+			{
+				ChangeStatus([manual](Status &status)
+				{
+					status.state = State::Checking;
+					status.manual = manual;
+					status.error.clear();
+				});
+			};
+			return StartWork(begin, [manual]() { RunCheck(manual); }, holdsBusy);
+		}
+	}
+
 	bool UpdateClient::Check(const bool manual)
 	{
-		const auto begin = [manual]()
-		{
-			ChangeStatus([manual](Status &status)
-			{
-				status.state = State::Checking;
-				status.manual = manual;
-				status.error.clear();
-			});
-		};
-		return StartWork(begin, [manual]() { RunCheck(manual); });
+		return StartCheck(manual, false);
 	}
 
 	bool UpdateClient::CheckIfDue()
@@ -1066,13 +1098,14 @@ namespace SceneryEditorX::Update
 				}
 			});
 		}
-		s.busy.store(false);
 		if (cached && !IsCheckDue(cached->checkedAt, NowSeconds(), CHECK_INTERVAL_SECONDS))
 		{
+			s.busy.store(false);
 			SEDX_CORE_INFO_TAG(LOG_TAG, "Updates were checked less than a day ago: not asking GitHub again until then");
 			return false;
 		}
-		return Check(false);
+		// Still holding the guard: no manual check or download can start between the cache and this check
+		return StartCheck(false, true);
 	}
 
 	bool UpdateClient::Download()

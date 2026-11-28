@@ -408,6 +408,19 @@ namespace SceneryEditorX::Update
 		return true;
 	}
 
+	bool SameOrigin(const std::string_view a, const std::string_view b)
+	{
+		const auto origin = [](const std::string_view url) -> std::string
+		{
+			const size_t scheme = url.find("://");
+			if (scheme == std::string_view::npos || scheme == 0)
+				return {};
+			return ToLower(url.substr(0, url.find_first_of("/?#", scheme + 3)));
+		};
+		const std::string left = origin(a);
+		return !left.empty() && left == origin(b);
+	}
+
 	bool IsCheckDue(const std::int64_t lastCheck, const std::int64_t now, const std::int64_t interval)
 	{
 		if (lastCheck <= 0 || now < lastCheck)
