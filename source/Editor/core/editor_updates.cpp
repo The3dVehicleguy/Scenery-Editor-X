@@ -80,6 +80,7 @@ namespace SceneryEditorX::EditorUpdates
 			bool forced = false;			// --check-updates: a check like Help > Check for Updates, window included
 			bool autoDownload = false;		// --update-download: download the update found, as Download and Install would
 			bool started = false;			// The startup check ran
+			bool retryCheck = false;		// A check the user asked for met the startup check's brief busy guard
 			double startAt = -1.0;			// ImGui time it runs at (set on the first Tick)
 
 			bool windowOpen = false;
@@ -460,6 +461,9 @@ namespace SceneryEditorX::EditorUpdates
 		if (!s.initialized)
 			return;
 
+		if (s.retryCheck)
+			s.retryCheck = !UpdateClient::Check(true);
+
 		if (s.automatic && !s.started)
 		{
 			const double now = ImGui::GetTime();
@@ -596,8 +600,15 @@ namespace SceneryEditorX::EditorUpdates
 	{
 		if (!S().initialized)
 			return;
-		S().launchError.clear();
-		UpdateClient::Check(true);	// Busy (a download running): the window shows that instead
+		State &s = S();
+		s.launchError.clear();
+		// Refused while something runs: a download keeps going (the window shows it); anything else is only the startup
+		// check reading its cache for a moment, so ask again next frame instead of silently doing nothing
+		if (!UpdateClient::Check(true))
+		{
+			const UpdateState state = UpdateClient::GetStatus().state;
+			s.retryCheck = state != UpdateState::Downloading && state != UpdateState::Checking;
+		}
 		OpenWindow();
 	}
 

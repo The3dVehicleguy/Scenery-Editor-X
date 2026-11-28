@@ -325,7 +325,7 @@ TEST_CASE("Requests are only redirected to GitHub", "[update][url]")
 {
 	for (const char *ok : { "https://github.com/x/y/releases/download/v1/a.exe", "https://api.github.com/repos/x/y/releases/latest",
 		"https://objects.githubusercontent.com/github-production-release-asset/1/2?x=1", "https://release-assets.githubusercontent.com/a",
-		"HTTPS://Release-Assets.GitHubUserContent.com:443/a", "https://raw.githubusercontent.com/x" })
+		"HTTPS://Release-Assets.GitHubUserContent.com:443/a", "https://github-releases.githubusercontent.com/x" })
 	{
 		INFO(ok);
 		CHECK(IsAllowedRedirect(ok, false));
@@ -334,7 +334,12 @@ TEST_CASE("Requests are only redirected to GitHub", "[update][url]")
 	for (const char *bad : { "http://github.com/a", "http://objects.githubusercontent.com/a", "https://githubusercontent.com/a",
 		"https://evilgithubusercontent.com/a", "https://githubusercontent.com.evil.example/a", "https://github.com.evil.example/a",
 		"https://gist.github.com/a", "https://github.com@evil.example/a", "https://example.com/a", "ftp://github.com/a", "", "https://",
-		"https://objects.githubusercontent.com\\@evil.example/a" })
+		"https://objects.githubusercontent.com\\@evil.example/a",
+		// Hosts serving what any user publishes
+		"https://raw.githubusercontent.com/x/y/main/a.exe", "https://gist.githubusercontent.com/x/1/raw/a.exe",
+		"https://user-images.githubusercontent.com/1/a.exe", "https://private-user-images.githubusercontent.com/a",
+		"https://camo.githubusercontent.com/a", "https://avatars.githubusercontent.com/u/1", "https://RAW.GitHubUserContent.com/a",
+		"https://x.raw.githubusercontent.com/a" })
 	{
 		INFO(bad);
 		CHECK_FALSE(IsAllowedRedirect(bad, false));

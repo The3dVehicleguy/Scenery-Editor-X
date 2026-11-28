@@ -138,8 +138,9 @@ namespace SceneryEditorX::Update
 
 	/**
 	 * @brief Whether a request may be redirected to a URL: https to GitHub (github.com, api.github.com) or its file hosts
-	 * (any *.githubusercontent.com, where release files are served from; the whole domain, so a renamed file host keeps
-	 * working). With a test server (testServer), its own loopback address too. Downloads are checked by SHA-256 as well.
+	 * (*.githubusercontent.com, where release files are served from; the whole domain, so a renamed file host keeps
+	 * working, apart from the hosts serving what any user publishes: raw, gist, user-images, private-user-images, camo,
+	 * avatars). With a test server (testServer), its own loopback address too. Downloads are checked by SHA-256 as well.
 	 */
 	bool IsAllowedRedirect(std::string_view url, bool testServer);
 

@@ -390,8 +390,21 @@ namespace SceneryEditorX::Update
 		if (authority.empty() || authority.find_first_of("@ \\") != std::string_view::npos)
 			return false;
 		const std::string host = ToLower(authority.substr(0, authority.find(':')));
+		if (host == "github.com" || host == "api.github.com")
+			return true;
+		// GitHub's file hosts, by domain so a renamed release-file host keeps working (it was renamed in 2025), minus
+		// the ones that serve what any user publishes (files in repositories, gists, uploaded images, proxied images)
 		constexpr std::string_view FILE_HOSTS = ".githubusercontent.com";
-		return host == "github.com" || host == "api.github.com" || (host.size() > FILE_HOSTS.size() && host.ends_with(FILE_HOSTS));
+		if (host.size() <= FILE_HOSTS.size() || !host.ends_with(FILE_HOSTS))
+			return false;
+		const std::string_view subdomain = std::string_view(host).substr(0, host.size() - FILE_HOSTS.size());
+		constexpr std::string_view USER_CONTENT[] = { "raw", "gist", "user-images", "private-user-images", "camo", "avatars" };
+		for (const std::string_view hostName : USER_CONTENT)
+		{
+			if (subdomain == hostName || subdomain.ends_with("." + std::string(hostName)))
+				return false;
+		}
+		return true;
 	}
 
 	bool IsCheckDue(const std::int64_t lastCheck, const std::int64_t now, const std::int64_t interval)
