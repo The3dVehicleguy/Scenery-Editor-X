@@ -39,6 +39,7 @@
 #include "editor_scene.h"
 #include "editor_selection.h"
 #include "editor_tools.h"
+#include "editor_visibility.h"
 #include "facade_authoring.h"
 #include "facade_tool.h"
 #include "node_tool.h"
@@ -50,9 +51,11 @@
 #include <chrono>
 #include <cmath>
 #include <format>
+#include <functional>
 #include <limits>
 #include <map>
 #include <optional>
+#include <unordered_set>
 #include <SceneryEditorX/logging/logging.hpp>
 #include <SceneryEditorX/renderer/gbuffer.h>
 #include <SceneryEditorX/renderer/renderer.h>
@@ -65,6 +68,7 @@
 #include <SceneryEditorX/xplane/xp_library_manager.h>
 #include <SceneryEditorX/xplane/xp_texture_loader.h>
 #include <SceneryEditorX/xplane/xp_scene.h>
+#include <SceneryEditorX/xplane/xp_terrain_scene.h>
 
 // -------------------------------------------------------
 
@@ -83,6 +87,7 @@ namespace SceneryEditorX::ToolsSelfTest
 			WaitScene,
 			Pick,
 			WaitPick,
+			Visibility,
 			OrthoTop,
 			OrthoPick,
 			OrthoWaitPick,
@@ -296,6 +301,11 @@ namespace SceneryEditorX::ToolsSelfTest
 			Step dragNext = Step::Done;
 			uint64_t historyBefore = 0;
 			int showcaseStage = 0;
+			// Hide, lock and isolate (issue 104): the most covered selectable target, each checked against a new pick
+			std::optional<Target> visTarget;
+			int visPhase = 0;
+			int visFrames = 0;
+			uint64_t visTicket = 0;
 		};
 
 		State &S()
@@ -466,6 +476,74 @@ namespace SceneryEditorX::ToolsSelfTest
 					EDITOR_INFO_TAG(LOG_TAG, "Clicking '{}' selects '{}'", EditorScene::GetName(handle), EditorSelection::Describe(*s.picked));
 			}
 			Check(s.picked.has_value(), "a picked entity resolves to a selectable target");
+		}
+
+		/* @brief The most covered target clicking can select (not the ground, nothing read-only), for the visibility checks. */
+		std::optional<Target> VisibilityCandidate(const ScenePicking::Result &result)
+		{
+			entt::registry *registry = EditorScene::GetRegistry();
+			if (!registry)
+				return std::nullopt;
+			std::map<uint32_t, size_t> pixels;
+			for (const uint32_t id : result.ids)
+			{
+				if (id != 0)
+					++pixels[id];
+			}
+			std::vector<std::pair<size_t, uint32_t>> order;
+			for (const auto &[id, count] : pixels)
+				order.emplace_back(count, id);
+			std::ranges::sort(order, std::greater<>());
+			for (const auto &[count, id] : order)
+			{
+				const entt::entity handle = ScenePicking::Resolve(*registry, id);
+				if (handle == entt::null || XPlane::SceneTerrain::Contains(EditorScene::GetID(handle)))
+					continue;
+				if (std::optional<Target> target = EditorSelection::FromPick(EditorScene::GetID(handle)); target && !EditorSelection::IsReadOnly(*target))
+					return target;
+			}
+			return std::nullopt;
+		}
+
+		/* @brief A pick result's pixels drawn by a target (its entities and what is below them), by the ground, and by anything else. */
+		struct PixelCount
+		{
+			size_t target = 0;
+			size_t terrain = 0;
+			size_t others = 0;
+		};
+
+		PixelCount CountPixels(const ScenePicking::Result &result, const Target &target)
+		{
+			PixelCount count;
+			entt::registry *registry = EditorScene::GetRegistry();
+			if (!registry)
+				return count;
+			std::vector<uint64_t> entities;
+			EditorSelection::CollectEntities(target, entities);
+			const std::unordered_set<uint64_t> mine(entities.begin(), entities.end());
+			std::map<uint32_t, int> kinds;	// 0 the target, 1 the ground, 2 anything else
+			for (const uint32_t id : result.ids)
+			{
+				if (id == 0)
+					continue;
+				const auto [it, added] = kinds.try_emplace(id, 2);
+				if (added)
+				{
+					entt::entity handle = ScenePicking::Resolve(*registry, id);
+					if (handle != entt::null && XPlane::SceneTerrain::Contains(EditorScene::GetID(handle)))
+						it->second = 1;
+					for (int depth = 0; depth < 64 && handle != entt::null && it->second == 2; ++depth)
+					{
+						if (mine.contains(EditorScene::GetID(handle)))
+							it->second = 0;
+						const RelationshipComponent *relationship = registry->try_get<RelationshipComponent>(handle);
+						handle = relationship && static_cast<uint64_t>(relationship->pParentHandle) != 0 ? Scene::TryGetEntityHandle(relationship->pParentHandle) : entt::null;
+					}
+				}
+				++(it->second == 0 ? count.target : it->second == 1 ? count.terrain : count.others);
+			}
+			return count;
 		}
 
 		std::string FindProjectItem(const ProjectFile::ItemKind kind, const bool placedObject)
@@ -733,7 +811,141 @@ namespace SceneryEditorX::ToolsSelfTest
 					break;
 				}
 				CheckPicks(view, result, renderWidth, renderHeight);
-				s.step = Step::OrthoTop;
+				s.visTarget = VisibilityCandidate(result);
+				s.step = Step::Visibility;
+				break;
+			}
+
+			case Step::Visibility:
+			{
+				// Hide, lock and isolate (issue 104) on the most covered selectable target, each checked against a new pick
+				if (!s.visTarget)
+				{
+					Check(false, "visibility: a target to hide, lock and isolate");
+					s.step = Step::OrthoTop;
+					break;
+				}
+				const Target target = *s.visTarget;
+				const ProjectFile::ProjectDocument *project = EditorProjects::GetDocument();
+				const auto takePick = [&s](ScenePicking::Result &result)
+				{
+					if (ScenePicking::TryGetResult(s.visTicket, result))
+					{
+						s.visFrames = 0;
+						return true;
+					}
+					if (++s.visFrames > 600)
+					{
+						Check(false, "visibility: pick readback arrived");
+						s.visPhase = 99;
+					}
+					return false;
+				};
+				switch (s.visPhase)
+				{
+					case 0:
+					{
+						EDITOR_INFO_TAG(LOG_TAG, "Visibility checks on '{}'", EditorSelection::Describe(target));
+						EditorSelection::Select(context, target);
+						EditorVisibility::HideSelected(context);
+						Check(EditorVisibility::IsHidden(target), "visibility: Hide Selected hides the selection");
+						Check(!EditorSelection::IsSelected(target), "visibility: what is hidden leaves the selection");
+						if (project)
+							Check(!project->GetProject().view.hidden.empty(), "visibility: the project saves what is hidden");
+						s.wait = 10;	// The GPU scene takes the change, then the pick pass draws without it
+						s.visPhase = 1;
+						break;
+					}
+					case 1:
+					case 3:
+						s.visTicket = ScenePicking::Request(0, 0, static_cast<uint32_t>(renderWidth), static_cast<uint32_t>(renderHeight));
+						++s.visPhase;
+						break;
+					case 2:
+					{
+						ScenePicking::Result result;
+						if (!takePick(result))
+							break;
+						const PixelCount hidden = CountPixels(result, target);
+						EDITOR_INFO_TAG(LOG_TAG, "Hidden: {} target pixels, {} ground, {} others", hidden.target, hidden.terrain, hidden.others);
+						Check(hidden.target == 0, "visibility: a hidden target isn't drawn or picked");
+
+						// Something parented under it afterwards is hidden with it (Scene::ParentChanged); the hide reached
+						// the entities on the frame after Hide Selected (EditorVisibility::Tick)
+						std::vector<uint64_t> entities;
+						EditorSelection::CollectEntities(target, entities);
+						Entity parent = entities.empty() ? Entity() : Scene::TryGetEntityWithUUID(UUID(entities.front()));
+						Check(parent && parent.IsHiddenInTree(), "visibility: the hidden target's entities are hidden");
+						if (parent)
+						{
+							Entity child = Scene::CreateEntity("Visibility self-test child");
+							Check(child && !child.IsHiddenInTree(), "visibility: a new root entity isn't hidden");
+							if (child)
+							{
+								child.SetParent(parent);
+								Check(child.IsHiddenInTree(), "visibility: an entity parented under a hidden one is hidden too");
+
+								// ...and shown again when it moves out from under it, off the hidden parent's list
+								Entity other = Scene::CreateEntity("Visibility self-test other parent");
+								if (other)
+								{
+									child.SetParent(other);
+									const UUID childId = child.GetUUID();
+									const std::vector<UUID> &left = parent.GetComponent<RelationshipComponent>().pChildren;
+									Check(!child.IsHiddenInTree() && std::ranges::find(left, childId) == left.end(),
+										"visibility: an entity moved out from under a hidden one is shown, and off its list");
+									EditorScene::Destroy(EditorScene::GetID(static_cast<entt::entity>(other)));	// Takes the child with it
+								}
+								else
+								{
+									EditorScene::Destroy(EditorScene::GetID(static_cast<entt::entity>(child)));
+								}
+							}
+						}
+
+						EditorVisibility::ShowAll(context);
+						Check(!EditorVisibility::IsHidden(target), "visibility: Show All shows it again");
+						EditorHistory::Undo();
+						Check(EditorVisibility::IsHidden(target), "visibility: undoing Show All hides it again");
+						EditorHistory::Redo();
+						Check(!EditorVisibility::IsHidden(target) && !EditorVisibility::AnyHidden(), "visibility: redoing it shows it");
+						if (project)
+							Check(project->GetProject().view.hidden.empty(), "visibility: the project saves nothing hidden once everything is shown");
+
+						EditorSelection::Select(context, target);
+						EditorVisibility::LockSelected(context);
+						Check(EditorVisibility::IsLocked(target) && EditorSelection::IsReadOnly(target), "visibility: a locked target is read-only to the tools");
+						Check(!EditorTools::DeleteSelection(context) && EditorSelection::Resolve(target) != 0, "visibility: Delete leaves a locked target alone");
+						EditorVisibility::UnlockAll(context);
+						Check(!EditorVisibility::IsLocked(target), "visibility: Unlock All unlocks it");
+
+						EditorSelection::Select(context, target);
+						EditorVisibility::Isolate(context);
+						Check(EditorVisibility::IsIsolating(), "visibility: Isolate Selection isolates");
+						s.wait = 10;
+						s.visPhase = 3;
+						break;
+					}
+					case 4:
+					{
+						ScenePicking::Result result;
+						if (!takePick(result))
+							break;
+						const PixelCount isolated = CountPixels(result, target);
+						EDITOR_INFO_TAG(LOG_TAG, "Isolated: {} target pixels, {} ground, {} others", isolated.target, isolated.terrain, isolated.others);
+						Check(isolated.target > 0, "visibility: an isolated target is still drawn");
+						Check(isolated.others == 0, "visibility: isolation draws only the selection and the ground");
+						EditorVisibility::ExitIsolation();
+						Check(!EditorVisibility::IsIsolating() && !EditorVisibility::AnyHidden(), "visibility: ending isolation shows everything again");
+						EditorSelection::Clear(context);
+						s.wait = 10;
+						s.visPhase = 99;
+						break;
+					}
+					default:
+						s.step = Step::OrthoTop;
+						break;
+				}
 				break;
 			}
 

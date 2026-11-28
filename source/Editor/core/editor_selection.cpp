@@ -32,6 +32,7 @@
 #include "editor_context.h"
 #include "editor_project.h"
 #include "editor_scene.h"
+#include "editor_visibility.h"
 #include <algorithm>
 #include <SceneryEditorX/renderer/scene_picking.h>
 #include <SceneryEditorX/xplane/xp_scene.h>
@@ -485,15 +486,19 @@ namespace SceneryEditorX::EditorSelection
 
 	bool IsReadOnly(const Target &target, std::string *reason)
 	{
-		if (target.type != TargetType::Entity)
-			return false;
-
 		const auto readOnly = [reason](const char *why)
 		{
 			if (reason)
 				*reason = why;
 			return true;
 		};
+
+		// Locked (itself or below something locked): the tools leave it alone until it is unlocked
+		if (EditorVisibility::IsLocked(target))
+			return readOnly("Locked: unlock it to change it");
+
+		if (target.type != TargetType::Entity)
+			return false;
 
 		if (const AirportElementComponent *element = SceneAirports::FindElement(target.entity))
 		{

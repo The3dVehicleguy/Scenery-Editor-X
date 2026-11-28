@@ -278,6 +278,27 @@ namespace SceneryEditorX::ProjectFile
 		bool operator==(const LibraryFilter &) const = default;
 	};
 
+	/**
+	 * @brief What the editor's view hides and locks, saved with the project so it opens the way it was left (not in
+	 * WorldEditor files). Each key names what it is about, so it outlives the entities that draw it: "item/<id>" a
+	 * project item, "row/<airport>/<kind>/<index>" an apt.dat row, group or airport, "entity/<name>/<name>#<n>" anything
+	 * else by the names on its path in the scene (#n: the nth of siblings with that name, from 0, when n > 0). A
+	 * project item's lock is SceneryItem::locked, not listed here.
+	 *
+	 * Entity paths are as stable as the data the scene is loaded from: they name entities by the names and order they are
+	 * loaded with (what the editor keeps when they were hidden or locked). If that data changes so that the names or the
+	 * order of same-named siblings differ (another scenery pack version, say), a key may name another entity or none.
+	 * Project items and apt.dat rows don't depend on it.
+	 */
+	struct ProjectViewState
+	{
+		std::vector<std::string> hidden;	// Hidden in the view (still exported)
+		std::vector<std::string> locked;	// Locked, apart from project items
+
+		[[nodiscard]] bool IsEmpty() const { return hidden.empty() && locked.empty(); }
+		bool operator==(const ProjectViewState &) const = default;
+	};
+
 	/* @brief A whole project. */
 	struct SceneryProject
 	{
@@ -291,6 +312,7 @@ namespace SceneryEditorX::ProjectFile
 		PropertyList wedPreferences;					// WorldEditor <prefs>, kept for the round trip
 		PropertyList properties;						// "other-properties"
 		std::vector<LibraryFilter> libraryFilters;		// The library browser's saved filters (not in WorldEditor files)
+		ProjectViewState view;							// What the editor's view hides and locks (not in WorldEditor files)
 
 		[[nodiscard]] ProjectAirport *FindAirport(std::string_view id);
 		[[nodiscard]] const ProjectAirport *FindAirport(std::string_view id) const;

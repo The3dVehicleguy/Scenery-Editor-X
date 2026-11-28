@@ -58,6 +58,7 @@ namespace SceneryEditorX::ProjectFile
 		constexpr const char *KEY_LIBRARY = "Library";
 		constexpr const char *KEY_ENVIRONMENT = "Environment";
 		constexpr const char *KEY_LIBRARY_FILTERS = "LibraryFilters";
+		constexpr const char *KEY_VIEW = "View";
 		constexpr const char *KEY_WED = "WED";
 		constexpr const char *KEY_PROPERTIES = "other-properties";
 
@@ -1126,6 +1127,8 @@ namespace SceneryEditorX::ProjectFile
 			root[KEY_ENVIRONMENT] = ToJson(*project.environment, context);
 		if (!project.libraryFilters.empty())
 			root[KEY_LIBRARY_FILTERS] = ToJson(project.libraryFilters, context);
+		if (!project.view.IsEmpty())
+			root[KEY_VIEW] = ToJson(project.view, context);
 		if (!project.wedPreferences.empty())
 		{
 			Json prefs = Json::object();
@@ -1234,6 +1237,14 @@ namespace SceneryEditorX::ProjectFile
 				FromJson(*it, out.libraryFilters, context, KEY_LIBRARY_FILTERS);
 			else
 				context.Warn(KEY_LIBRARY_FILTERS, "expected a list of filters");
+		}
+		if (const auto it = root.find(KEY_VIEW); it != root.end())
+		{
+			used.insert(KEY_VIEW);
+			if (it->is_object())
+				FromJson(*it, out.view, context, KEY_VIEW);
+			else
+				context.Warn(KEY_VIEW, "expected an object");
 		}
 		if (const auto it = root.find(KEY_WED); it != root.end())
 		{

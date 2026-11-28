@@ -39,6 +39,7 @@
 #include "editor_scene.h"
 #include "editor_selection.h"
 #include "editor_tools.h"
+#include "editor_visibility.h"
 #include "editor_welcome.h"
 #include "project_dialogs.h"
 #include "project_hub.h"
@@ -299,6 +300,7 @@ namespace SceneryEditorX
 		ViewportMenus::RegisterCommands();
 		FacadeTool::RegisterCommands();
 		FacadeAuthoring::RegisterCommands();
+		EditorVisibility::RegisterCommands();	// After FacadeTool's: its item.lock covers every kind of target
 		BuildMainMenus();
 		// The viewports drive the camera (keymaps, several viewports): the engine camera reads no input of its own
 		Camera::SetInputExternal(true);
@@ -441,6 +443,8 @@ namespace SceneryEditorX
 
 		// Selection: follow what other panels selected last frame, drop what rebuilds removed
 		EditorSelection::Sync(&m_Context);
+		// Hide, isolate and lock: applied to the entities the rebuilds above made, before anything draws or picks
+		EditorVisibility::Tick(&m_Context);
 
 		HandleShortcuts();
 
@@ -590,9 +594,10 @@ namespace SceneryEditorX
 		if (ImGui::MenuItem(EditorUI::IconLabel(SEDX_ICON_CROSSHAIRS, "Frame Selection").c_str(), "F", false, !EditorSelection::IsEmpty()))
 			EditorTools::FrameSelection();
 		ImGui::Separator();
+		EditorVisibility::DrawMenuItems(&m_Context);
+		ImGui::Separator();
 		EditorCommands::MenuItem("item.hide", &m_Context);
 		EditorCommands::MenuItem("item.unhide_all", &m_Context);
-		EditorCommands::MenuItem("item.lock", &m_Context);
 		ImGui::Separator();
 		for (int t = 0; t < static_cast<int>(EditorTools::Tool::Count); ++t)
 		{
@@ -612,6 +617,8 @@ namespace SceneryEditorX
 			if (const uint64_t created = EditorScene::CreateEmpty("Empty Entity"); created != 0)
 				EditorSelection::Select(&m_Context, EditorSelection::Target::ForEntity(created));
 		}
+		ImGui::Separator();
+		EditorVisibility::DrawMenuItems(&m_Context);
 	}
 
 	void EditorLayer::DrawXPlaneMenu()
@@ -1067,6 +1074,9 @@ namespace SceneryEditorX
 
 		// Camera: numpad views, Home, and the keymap's own keys (over the viewport)
 		EditorCamera::HandleShortcuts(&m_Context);
+
+		// Hide / show / isolate (the keymap's keys, wherever the keyboard isn't typing)
+		EditorVisibility::HandleShortcuts(&m_Context);
 
 		// The open project (which saves its airport too), else the open airport
 		if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_N, ImGuiInputFlags_RouteGlobal))

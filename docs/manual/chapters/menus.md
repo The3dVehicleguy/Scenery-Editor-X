@@ -38,9 +38,14 @@ Every item in the menu bar, in order. Items that need something (an open project
 | Duplicate | <kbd>Ctrl+D</kbd> | Copies the selected project items 3 m south-east. |
 | Deselect | <kbd>Esc</kbd> | Clears the selection. |
 | Frame Selection | <kbd>F</kbd> | Moves the camera so the whole selection fills the view. |
-| Hide Selection | | Hidden items aren't drawn or exported. |
-| Show All Hidden | | Shows every hidden project item. |
-| Lock / Unlock | | Locked items can't be moved or edited. |
+| Hide Selected | <kbd>H</kbd> (Maya: <kbd>Ctrl+H</kbd>) | Hides the selection in the view; it is still exported. |
+| Hide Unselected | <kbd>Shift+H</kbd> (Maya: <kbd>Alt+H</kbd>) | Hides everything but the selection, the ground under it and the lights. |
+| Show All | <kbd>Alt+H</kbd> (Maya: <kbd>Ctrl+Shift+H</kbd>) | Shows everything hidden in the view. |
+| Isolate Selection | <kbd>Numpad /</kbd> or <kbd>Alt+Q</kbd> (Maya: also <kbd>Shift+I</kbd>) | Shows only the selection over the ground, until you press it again. |
+| Lock / Unlock | | Locked things are drawn but can't be picked in the viewport, moved or edited. |
+| Unlock All | | Unlocks everything locked. |
+| Exclude from Export | | The selected project items stay in the project but aren't drawn or exported (WorldEditor's hidden items). |
+| Include All in Export | | Draws and exports every project item excluded from export. |
 | Select, Move, Rotate, Scale, Nodes, Facade | <kbd>Q</kbd> <kbd>W</kbd> <kbd>E</kbd> <kbd>R</kbd> <kbd>V</kbd> <kbd>B</kbd> | Picks the tool. |
 | Preferences… | | Navigation keymap and camera options; the tool shortcuts. |
 
@@ -49,6 +54,7 @@ Every item in the menu bar, in order. Items that need something (an open project
 | Item | What it does |
 |---|---|
 | Add Empty Entity | Adds an empty entity to the scene (shown in the OUTLINER). |
+| Hide Selected, Hide Unselected, Show All, Isolate Selection, Lock / Unlock, Unlock All | As in the Edit menu. See [Hiding, isolating and locking](selecting-and-editing.md#hiding-isolating-and-locking). |
 
 ## X-Plane
 

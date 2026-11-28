@@ -125,6 +125,16 @@ namespace SceneryEditorX
 		/* @brief Queues an entity for every reader (Entity::SetActive, Renderable::SetFlag call it on a change). Any thread. */
 		static void MarkRenderStateChanged(entt::entity entity);
 
+		/* @brief How many live entities are hidden themselves (Entity::SetHidden). */
+		static uint32_t GetHiddenEntityCount();
+
+		/**
+		 * @brief Call after an entity's parent link changed (Entity::SetParent, SetParentUUID and the scene builders'
+		 * attach helpers do): it takes its parent's hidden state (Entity::IsHiddenInTree) and passes it down, and the
+		 * render passes re-read whatever that changed. Nothing to do while no entity is hidden. Main thread.
+		 */
+		static void ParentChanged(entt::entity child);
+
 		/* @brief Bumped only when an entity is destroyed: caches of Entity pointers revalidate when it moves. */
 		static uint64_t GetDestroyVersion();
 
@@ -252,6 +262,15 @@ namespace SceneryEditorX
 		 * @return The record, or nullptr for entt::null, another scene or a destroyed entity (the version differs).
 		 */
 		static EntityRuntime *FindRuntime(entt::entity handle, const Scene *scene);
+
+		/* @brief Entity::SetHidden's count of hidden entities (GetHiddenEntityCount). Main thread. */
+		static void CountHiddenEntity(bool hidden);
+
+		/**
+		 * @brief Sets EntityRuntime::hiddenInTree on an entity (own flag or its parent's) and down its subtree, marking each
+		 * entity whose value changes (Entity::SetHidden, ParentChanged). Main thread.
+		 */
+		static void PropagateHidden(entt::entity root);
 
 		static Ref<Camera> m_Camera;
 

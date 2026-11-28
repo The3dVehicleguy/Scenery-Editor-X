@@ -331,6 +331,73 @@ msgstr "プロジェクトを X-Plane シーナリーパックとして書き出
 msgid "Search"
 msgstr "検索"
 
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Change visibility of {} item"
+msgid_plural "Change visibility of {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
+msgid "Exit"
+msgstr ""
+
+#. undo steps (Edit > Undo ...); {} is the name of what was hidden, shown, locked or unlocked
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Hide {}"
+msgstr ""
+
+#. undo steps (Edit > Undo ...); {} is how many things were hidden, shown, locked or unlocked
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Hide {} item"
+msgid_plural "Hide {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Isolated: {} item"
+msgid_plural "Isolated: {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Lock {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Lock {} item"
+msgid_plural "Lock {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show everything again ({})"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show {} item"
+msgid_plural "Show {} items"
+msgstr[0] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Unlock {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Unlock {} item"
+msgid_plural "Unlock {} items"
+msgstr[0] ""
+
 #: source/Editor/core/editor_welcome.cpp
 msgid "Action"
 msgstr "操作"
@@ -2061,10 +2128,68 @@ msgstr "壁"
 msgid "Add an entity to the scene"
 msgstr "シーンにエンティティを追加"
 
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Hidden with a row above it, or by isolation"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Hide"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Hide in the view (it is still exported)"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Isolate"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Lock"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Lock: can't be picked in the viewport, moved or edited"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Locked with a row above it"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Locked: unlock it to delete it"
+msgstr ""
+
 #. A panel title, shown in capitals: write it in capitals too if your script has them.
 #: source/Editor/panels/outliner_panel.cpp
 msgid "OUTLINER"
 msgstr "アウトライナー"
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+#: source/Editor/panels/settings_panels.cpp
+msgid "Show"
+msgstr "表示"
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Show in the view"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+#: source/Editor/panels/properties_panel.cpp
+msgid "Unlock"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "(excluded from export)"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "(hidden)"
+msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
 msgid "Add Export"
@@ -2099,6 +2224,14 @@ msgid "Elevation (m)"
 msgstr "標高 (m)"
 
 #: source/Editor/panels/project_panel.cpp
+msgid "Exclude from Export"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Excluded items stay in the project but aren't drawn or exported to X-Plane (WorldEditor's hidden items)"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
 msgid "Export art from the project folder (real paths stay relative to it)"
 msgstr "プロジェクトフォルダーのアートをエクスポートします（実パスはフォルダーからの相対パスのまま）"
 
@@ -2115,8 +2248,16 @@ msgid "From apt.dat"
 msgstr "apt.dat から"
 
 #: source/Editor/panels/project_panel.cpp
-msgid "Hidden items stay in the project but aren't exported to X-Plane (and aren't drawn)"
-msgstr "非表示の項目はプロジェクトに残りますが、X-Plane にはエクスポートされません（描画もされません）"
+msgid "Hidden in the view only: it is still exported"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Include in Export"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Locked items can't be picked in the viewport, moved or edited"
+msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
 msgid "Moves only when a save changes the content, so unchanged saves leave git clean"
@@ -2271,6 +2412,10 @@ msgid "Lights"
 msgstr "ライト"
 
 #: source/Editor/panels/properties_panel.cpp
+msgid "Locked"
+msgstr ""
+
+#: source/Editor/panels/properties_panel.cpp
 msgid "Move the camera to look at it"
 msgstr "カメラを移動してこれを表示"
 
@@ -2365,6 +2510,10 @@ msgstr "X-Plane オブジェクト"
 #: source/Editor/panels/properties_panel.cpp
 msgid "X-Plane sign syntax, e.g. {@Y}A{@L}22{^r}"
 msgstr "X-Plane の標識構文。例：{@Y}A{@L}22{^r}"
+
+#: source/Editor/panels/properties_panel.cpp
+msgid "with a row above it"
+msgstr ""
 
 #: source/Editor/panels/scene_viewport.cpp
 msgid ""
@@ -2956,10 +3105,6 @@ msgid "Sharpness"
 msgstr "シャープネス"
 
 #: source/Editor/panels/settings_panels.cpp
-msgid "Show"
-msgstr "表示"
-
-#: source/Editor/panels/settings_panels.cpp
 msgid "Shutter (s)"
 msgstr "シャッター (s)"
 
@@ -3342,3 +3487,6 @@ msgstr "すべての列を内容に合わせる"
 msgctxt "imgui"
 msgid "Size column to fit"
 msgstr "列を内容に合わせる"
+
+#~ msgid "Hidden items stay in the project but aren't exported to X-Plane (and aren't drawn)"
+#~ msgstr "非表示の項目はプロジェクトに残りますが、X-Plane にはエクスポートされません（描画もされません）"

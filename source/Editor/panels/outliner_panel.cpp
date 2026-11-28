@@ -34,6 +34,7 @@
 #include <Editor/core/editor_selection.h>
 #include <Editor/core/editor_tools.h>
 #include <Editor/core/editor_ui.h>
+#include <Editor/core/editor_visibility.h>
 #include <unordered_set>
 #include <SceneryEditorX/renderer/font/font_awesome.h>
 #include <SceneryEditorX/renderer/ui/source/imgui/imgui_internal.h>
@@ -134,6 +135,74 @@ namespace SceneryEditorX
 		m_MatchFilter = m_Filter.InputBuf;
 	}
 
+	void OutlinerPanel::DrawToggles(const uint64_t entityId, const float x, const float y, const float size, const float gap)
+	{
+		using EditorVisibility::Target;
+		const Target target = EditorVisibility::ForEntity(entityId);
+		const bool hidden = EditorVisibility::IsHidden(target);
+		const bool hiddenByParent = !hidden && EditorVisibility::IsHiddenByParent(entityId);
+		const bool locked = EditorVisibility::IsLockedSelf(target);
+		const bool lockedByParent = !locked && EditorVisibility::IsLockedByParent(entityId);
+
+		for (int column = 1; column <= 2; ++column)
+		{
+			const bool eye = column == 1;
+			ImGui::SetCursorPos(ImVec2(x + gap + static_cast<float>(column - 1) * (size + gap), y));
+			ImGui::PushID(column);
+			const bool pressed = ImGui::InvisibleButton("##Toggle", ImVec2(size, size), ImGuiButtonFlags_PressedOnClick);
+			const ImVec2 min = ImGui::GetItemRectMin();
+			const ImVec2 max = ImGui::GetItemRectMax();
+			const bool hovered = ImGui::IsMouseHoveringRect(min, max);
+			ImGui::PopID();
+
+			const bool own = eye ? hidden : locked;
+			const auto set = [this, eye, &target](const bool value)
+			{
+				if (eye)
+					EditorVisibility::SetHidden(m_Context, { target }, value);
+				else
+					EditorVisibility::SetLocked(m_Context, { target }, value);
+			};
+			if (pressed)
+			{
+				// A press starts a drag: the rows it then crosses in this column get the same value, as one undo step
+				if (m_DragColumn != 0)
+					EditorVisibility::EndToggleGroup();
+				m_DragColumn = column;
+				m_DragValue = !own;
+				m_DragTouched = { entityId };
+				EditorVisibility::BeginToggleGroup();
+				set(m_DragValue);
+			}
+			else if (m_DragColumn == column && hovered && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+					 std::ranges::find(m_DragTouched, entityId) == m_DragTouched.end())
+			{
+				m_DragTouched.push_back(entityId);
+				if (own != m_DragValue)
+					set(m_DragValue);
+			}
+
+			// Own state bright, a parent's (or isolation's) dim, the off state faint (the lock only on hover)
+			const bool inherited = eye ? hiddenByParent : lockedByParent;
+			const char *icon = eye ? ((own || inherited) ? SEDX_ICON_EYE_SLASH : SEDX_ICON_EYE) : ((own || inherited) ? SEDX_ICON_LOCK : SEDX_ICON_UNLOCK);
+			ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+			if (!own && inherited)
+				color = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+			else if (!own)
+				color = ImGui::GetColorU32(ImGuiCol_Text, eye ? (hovered ? 0.8f : 0.4f) : (hovered ? 0.6f : 0.0f));
+			const ImVec2 iconSize = ImGui::CalcTextSize(icon);
+			ImGui::GetWindowDrawList()->AddText(ImVec2(min.x + (size - iconSize.x) * 0.5f, min.y + (size - iconSize.y) * 0.5f), color, icon);
+
+			if (hovered && m_DragColumn == 0)
+			{
+				if (eye)
+					EditorUI::ItemTooltip(own ? Text("Show in the view") : inherited ? Text("Hidden with a row above it, or by isolation") : Text("Hide in the view (it is still exported)"));
+				else
+					EditorUI::ItemTooltip(own ? Text("Unlock") : inherited ? Text("Locked with a row above it") : Text("Lock: can't be picked in the viewport, moved or edited"));
+			}
+		}
+	}
+
 	void OutlinerPanel::OnUIRender(bool &isOpen)
 	{
 		if (EditorUI::BeginPanel("OUTLINER###Outliner", &isOpen))
@@ -161,6 +230,22 @@ namespace SceneryEditorX
 			if (ImGui::BeginChild("##OutlinerList"))
 			{
 				RefreshLists();
+
+				// A toggle drag ends when the button goes up (wherever it is then)
+				if (m_DragColumn != 0 && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+				{
+					m_DragColumn = 0;
+					m_DragTouched.clear();
+					EditorVisibility::EndToggleGroup();
+				}
+
+				// The eye and lock column, left of the tree: the rows are indented past it
+				const float dpi = ImGui::GetStyle().FontScaleDpi;
+				const float toggleSize = ImGui::GetTextLineHeight();
+				const float toggleGap = 2.0f * dpi;
+				const float toggleColumnX = ImGui::GetCursorPosX();
+				const float toggleColumnWidth = toggleSize * 2.0f + toggleGap * 3.0f;
+				ImGui::Indent(toggleColumnWidth);
 
 				// Rows: a tree node when the entity has children (X-Plane objects, groups), a leaf otherwise. Rows outside
 				// the view are not submitted (a group can hold thousands of objects): a run of them becomes one Dummy of
@@ -232,13 +317,19 @@ namespace SceneryEditorX
 					if (children.empty())
 						flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
-					// Inactive entities (hidden by LOD or ANIM_hide) draw dimmed.
-					const bool active = entity->GetActive();
-					if (!active)
+					// The eye and lock first (in the column left of the tree), then the row where it was
+					const float rowX = ImGui::GetCursorPosX();
+					const float rowY = ImGui::GetCursorPosY();
+					DrawToggles(id, toggleColumnX, rowY, toggleSize, toggleGap);
+					ImGui::SetCursorPos(ImVec2(rowX, rowY));
+
+					// Inactive entities (turned off by LOD or ANIM_hide) and hidden ones (the eye) draw dimmed.
+					const bool dimmed = !entity->GetActive() || entity->IsHiddenInTree();
+					if (dimmed)
 						ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
 					const bool open = ImGui::TreeNodeEx(reinterpret_cast<void *>(static_cast<uintptr_t>(id)), flags, "%s",
 						EditorUI::IconLabel(EntityIcon(*entity), EditorScene::GetName(handle)).c_str());
-					if (!active)
+					if (dimmed)
 						ImGui::PopStyleColor();
 
 					// A double-click's second press is a click too: it frames instead of selecting again (a Ctrl toggle
@@ -264,8 +355,28 @@ namespace SceneryEditorX
 					ImGui::PushID(reinterpret_cast<void *>(static_cast<uintptr_t>(id)));
 					if (ImGui::BeginPopupContextItem("##EntityMenu"))
 					{
-						if (ImGui::MenuItem("Delete"))
+						const EditorVisibility::Target row = EditorVisibility::ForEntity(id);
+						const bool rowLocked = EditorVisibility::IsLocked(row);
+						if (ImGui::MenuItem("Delete", nullptr, false, !rowLocked))
 							pendingDelete = id;
+						if (rowLocked)
+							EditorUI::ItemTooltip("Locked: unlock it to delete it");
+						ImGui::Separator();
+						const bool rowHidden = EditorVisibility::IsHidden(row);
+						if (ImGui::MenuItem(EditorUI::IconLabel(rowHidden ? SEDX_ICON_EYE : SEDX_ICON_EYE_SLASH, rowHidden ? Text("Show") : Text("Hide")).c_str()))
+							EditorVisibility::SetHidden(m_Context, { row }, !rowHidden);
+						if (ImGui::MenuItem(EditorUI::IconLabel(SEDX_ICON_BULLSEYE, "Isolate").c_str()))
+						{
+							// Isolates the selection: this row, unless it is part of it already
+							if (const std::optional<EditorSelection::Target> target = EditorSelection::FromEntity(id); target && !EditorSelection::IsSelected(*target))
+								EditorSelection::Select(m_Context, *target);
+							EditorVisibility::ExitIsolation();
+							EditorVisibility::Isolate(m_Context);
+						}
+						const bool rowLockedSelf = EditorVisibility::IsLockedSelf(row);
+						if (ImGui::MenuItem(EditorUI::IconLabel(rowLockedSelf ? SEDX_ICON_UNLOCK : SEDX_ICON_LOCK, rowLockedSelf ? Text("Unlock") : Text("Lock")).c_str()))
+							EditorVisibility::SetLocked(m_Context, { row }, !rowLockedSelf);
+						ImGui::Separator();
 						if (EditorScene::Has<XPlane::XPlaneObjectComponent>(handle) && ImGui::MenuItem("Frame"))
 							XPlane::SceneObjects::FrameObject(id);
 						if (EditorScene::Has<XPlane::AirportElementComponent>(handle) && ImGui::MenuItem("Frame"))
@@ -285,6 +396,7 @@ namespace SceneryEditorX
 					draw_rows(draw_entity, m_Matches.size(), [this](const size_t i) { return m_Matches[i]; }, false);
 				else
 					draw_rows(draw_entity, m_Roots.size(), [this](const size_t i) { return m_Roots[i]; }, true);
+				ImGui::Unindent(toggleColumnWidth);
 
 				// Clicking empty space clears the selection.
 				if (m_Context && ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered())
