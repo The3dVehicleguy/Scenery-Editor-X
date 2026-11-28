@@ -331,6 +331,22 @@ msgstr "Das Projekt als X-Plane-Szenerie-Paket schreiben: Earth nav data/apt.dat
 msgid "Search"
 msgstr "Suchen"
 
+#: source/Editor/core/editor_visibility.cpp
+msgid "Exit"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Isolated: {} item"
+msgid_plural "Isolated: {} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show everything again ({})"
+msgstr ""
+
 #: source/Editor/core/editor_welcome.cpp
 msgid "Action"
 msgstr "Aktion"
@@ -2064,10 +2080,68 @@ msgstr "WÄNDE"
 msgid "Add an entity to the scene"
 msgstr "Eine Entität zur Szene hinzufügen"
 
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Hidden with a row above it, or by isolation"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Hide"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Hide in the view (it is still exported)"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Isolate"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Lock"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Lock: can't be picked in the viewport, moved or edited"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Locked with a row above it"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Locked: unlock it to delete it"
+msgstr ""
+
 #. A panel title, shown in capitals: write it in capitals too if your script has them.
 #: source/Editor/panels/outliner_panel.cpp
 msgid "OUTLINER"
 msgstr "GLIEDERUNG"
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+#: source/Editor/panels/settings_panels.cpp
+msgid "Show"
+msgstr "Anzeigen"
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Show in the view"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+#: source/Editor/panels/properties_panel.cpp
+msgid "Unlock"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "(excluded from export)"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "(hidden)"
+msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
 msgid "Add Export"
@@ -2102,6 +2176,14 @@ msgid "Elevation (m)"
 msgstr "Höhe (m)"
 
 #: source/Editor/panels/project_panel.cpp
+msgid "Exclude from Export"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Excluded items stay in the project but aren't drawn or exported to X-Plane (WorldEditor's hidden items)"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
 msgid "Export art from the project folder (real paths stay relative to it)"
 msgstr "Assets aus dem Projektordner exportieren (echte Pfade bleiben relativ dazu)"
 
@@ -2118,8 +2200,16 @@ msgid "From apt.dat"
 msgstr "Aus apt.dat"
 
 #: source/Editor/panels/project_panel.cpp
-msgid "Hidden items stay in the project but aren't exported to X-Plane (and aren't drawn)"
-msgstr "Ausgeblendete Elemente bleiben im Projekt, werden aber nicht nach X-Plane exportiert (und nicht gezeichnet)"
+msgid "Hidden in the view only: it is still exported"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Include in Export"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Locked items can't be picked in the viewport, moved or edited"
+msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
 msgid "Moves only when a save changes the content, so unchanged saves leave git clean"
@@ -2274,6 +2364,10 @@ msgid "Lights"
 msgstr "Lichter"
 
 #: source/Editor/panels/properties_panel.cpp
+msgid "Locked"
+msgstr ""
+
+#: source/Editor/panels/properties_panel.cpp
 msgid "Move the camera to look at it"
 msgstr "Die Kamera darauf ausrichten"
 
@@ -2368,6 +2462,10 @@ msgstr "X-PLANE-OBJEKT"
 #: source/Editor/panels/properties_panel.cpp
 msgid "X-Plane sign syntax, e.g. {@Y}A{@L}22{^r}"
 msgstr "X-Plane-Schildsyntax, z. B. {@Y}A{@L}22{^r}"
+
+#: source/Editor/panels/properties_panel.cpp
+msgid "with a row above it"
+msgstr ""
 
 #: source/Editor/panels/scene_viewport.cpp
 msgid ""
@@ -2959,10 +3057,6 @@ msgid "Sharpness"
 msgstr "Schärfe"
 
 #: source/Editor/panels/settings_panels.cpp
-msgid "Show"
-msgstr "Anzeigen"
-
-#: source/Editor/panels/settings_panels.cpp
 msgid "Shutter (s)"
 msgstr "Verschluss (s)"
 
@@ -3345,3 +3439,6 @@ msgstr "Alle Spalten an Inhalt anpassen"
 msgctxt "imgui"
 msgid "Size column to fit"
 msgstr "Spalte an Inhalt anpassen"
+
+#~ msgid "Hidden items stay in the project but aren't exported to X-Plane (and aren't drawn)"
+#~ msgstr "Ausgeblendete Elemente bleiben im Projekt, werden aber nicht nach X-Plane exportiert (und nicht gezeichnet)"
