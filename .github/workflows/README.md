@@ -15,6 +15,7 @@ What runs where, and when. Releases are described in [docs/RELEASING.md](../../d
 | Workflow | Runs on | What it does |
 |---|---|---|
 | [release.yml](release.yml) | A pushed `v*` tag (publishes, if the gate passes); pull requests that change the release pipeline and manual runs (dry runs, nothing published) | **Release gate** ([scripts/ci/release_gate.sh](../../scripts/ci/release_gate.sh): the tag is `v<version>`, matches `source/resource.h`, is on `release`, is newer than every release, has a CHANGELOG section) → **Unit tests** (`unit-tests.yml`) and **Windows installer** ([scripts/ci/build_release_windows.ps1](../../scripts/ci/build_release_windows.ps1): Release build, NSIS setup, a start of the staged editor, SHA-256) → **Publish the release** (the setup, its `.sha256` and `SHA256SUMS.txt`, notes from the CHANGELOG, marked latest). The editor's update check reads that release. |
+| [vcpkg-packages.yml](vcpkg-packages.yml) | Pushes to `dev` / `release` / `master` that change `vcpkg.json` or the vcpkg submodule; Mondays; manual; dependency pull requests (check only) | Builds the vcpkg ports once and keeps them as the artifact `vcpkg-x64-windows` ([scripts/ci/vcpkg_prebuilt.ps1](../../scripts/ci/vcpkg_prebuilt.ps1)); `release.yml` restores the newest set from a trusted run instead of building the ports again. [Spec](../../spec/spec-process-cicd-vcpkg-packages.md) |
 
 ## Issues and reviews
 

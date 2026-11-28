@@ -89,10 +89,6 @@ if ($Header -notmatch '#define\s+SEDX_VERSION_STRING\s+"(\d+\.\d+\.\d+\.\d+)"') 
 $Version = $Matches[1]
 Write-Step "Scenery Editor X $Version ($Channel)"
 
-if (-not $env:VULKAN_SDK -or -not (Test-Path $env:VULKAN_SDK)) { throw 'VULKAN_SDK is not set to an installed Vulkan SDK.' }
-if (-not (Test-Path (Join-Path $env:VULKAN_SDK 'Lib\slang.lib'))) { throw "The Vulkan SDK at $env:VULKAN_SDK has no Lib\slang.lib (the editor links Slang)." }
-Write-Host "    Vulkan SDK $env:VULKAN_SDK"
-
 if (-not $SkipBuild -and -not $SkipVcpkg) {
     # vcpkg ------------------------------------------------------
 
@@ -114,6 +110,11 @@ if (-not $SkipBuild -and -not $SkipVcpkg) {
     Invoke-Checked 'vcpkg install' { & $Vcpkg @VcpkgArgs }
     if ($VcpkgOnly) { return }
 }
+
+# The vcpkg ports don't need the Vulkan SDK (-VcpkgOnly runs without it); the editor and its setup do
+if (-not $env:VULKAN_SDK -or -not (Test-Path $env:VULKAN_SDK)) { throw 'VULKAN_SDK is not set to an installed Vulkan SDK.' }
+if (-not (Test-Path (Join-Path $env:VULKAN_SDK 'Lib\slang.lib'))) { throw "The Vulkan SDK at $env:VULKAN_SDK has no Lib\slang.lib (the editor links Slang)." }
+Write-Host "    Vulkan SDK $env:VULKAN_SDK"
 
 if (-not $SkipBuild) {
     # Configure and build -------------------------------------------

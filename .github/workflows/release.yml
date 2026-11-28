@@ -20,6 +20,7 @@ on:
       - .github/workflows/release.yml
       - scripts/ci/release_gate.sh
       - scripts/ci/build_release_windows.ps1
+      - scripts/ci/vcpkg_prebuilt.ps1
       - installer/**
   workflow_dispatch:
 
@@ -87,9 +88,12 @@ jobs:
     needs: gate
     runs-on: windows-latest
     timeout-minutes: 300
+    permissions:
+      contents: read
+      actions: read                         # Finds and downloads the prebuilt vcpkg packages
     env:
-      # Port builds are cached between runs (keyed on the vcpkg revision and vcpkg.json); a cold run builds them all
-      VCPKG_BINARY_SOURCES: clear;files,C:\vcpkg-cache,readwrite
+      # The prebuilt packages (vcpkg-packages.yml), read-only: a release never changes the set others build from
+      VCPKG_BINARY_SOURCES: clear;files,C:\vcpkg-cache,read
     defaults:
       run:
         shell: pwsh
@@ -137,32 +141,15 @@ jobs:
           "VULKAN_SDK=$root" | Add-Content $env:GITHUB_ENV
           "$root\Bin" | Add-Content $env:GITHUB_PATH
 
-      - name: vcpkg revision
-        id: vcpkg
-        shell: bash
-        run: |
-          echo "commit=$(git -C dependency/vcpkg rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
-          mkdir -p /c/vcpkg-cache
-
-      - name: vcpkg binary cache
-        id: vcpkg-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: C:\vcpkg-cache
-          key: vcpkg-x64-windows-${{ steps.vcpkg.outputs.commit }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-x64-windows-${{ steps.vcpkg.outputs.commit }}-
-            vcpkg-x64-windows-
+      # The newest package set from a trusted run of vcpkg-packages.yml (an Actions cache wouldn't do: it's scoped to the
+      # ref that saved it, and every release is a new tag). Without one, every port is built from source.
+      - name: Prebuilt vcpkg packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci/vcpkg_prebuilt.ps1 -Fetch -Destination 'C:\vcpkg-cache'
 
       - name: vcpkg ports
         run: ./scripts/ci/build_release_windows.ps1 -VcpkgOnly -VcpkgBuildtrees 'C:\vb'
-
-      - name: Keep the vcpkg ports
-        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: C:\vcpkg-cache
-          key: vcpkg-x64-windows-${{ steps.vcpkg.outputs.commit }}-${{ hashFiles('vcpkg.json') }}
 
       - name: NSIS
         run: |

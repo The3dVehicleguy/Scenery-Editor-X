@@ -85,6 +85,31 @@ The Windows job runs [`scripts/ci/build_release_windows.ps1`](../scripts/ci/buil
 same on a developer machine (Visual Studio, CMake, NSIS, the Vulkan SDK with `VULKAN_SDK` set):
 `pwsh scripts\ci\build_release_windows.ps1` builds `build\` and leaves the setup in `build\installer\`.
 
+## Prebuilt vcpkg packages
+
+Building the vcpkg ports (`vcpkg.json`: curl, freetype, msdfgen, spdlog and what they pull in, 33 packages) takes
+about an hour on a hosted runner. [`vcpkg-packages.yml`](../.github/workflows/vcpkg-packages.yml) builds them once
+and keeps them as the workflow artifact `vcpkg-x64-windows` (about 250 MB): vcpkg's binary cache, one zip per
+package, named by its ABI hash, with a `manifest.json` listing ports, versions and hashes. The Windows release job
+downloads the newest set (`scripts/ci/vcpkg_prebuilt.ps1 -Fetch`) and gives it to vcpkg read-only, so every release,
+patch, alpha or beta build restores the packages instead of compiling them. A package is used only when its ABI
+(port version, features, triplet, compiler) matches; anything else is built from source as before, and with no set
+at all the release still builds, just slower. The Actions cache couldn't do this: it's scoped to the ref that saved
+it, and every release is a new tag.
+
+| When the set is rebuilt | What happens |
+|---|---|
+| A push to `dev`, `release` or `master` that changes `vcpkg.json`, the vcpkg submodule, the Windows toolchain or the scripts | Starts from the newest set, builds only the ports that changed, drops the ones no longer used, uploads |
+| Every Monday (from the default branch's copy of the workflow, building `dev`) | Catches runner compiler updates and keeps the artifact from expiring (90 days) |
+| **Actions › vcpkg packages › Run workflow** | The same for any branch (`ref`, default `dev`) |
+| A pull request that changes the dependencies | Built as a check; its set is kept 7 days and never used by other runs |
+
+Only sets from pushes, the schedule and manual runs are used (they need write access), never a pull request's, so a
+pull request can't slip its own binaries into a release. Before a release that changes dependencies, let the push to
+`dev` (or a manual run) finish first; otherwise the release builds the new ports itself. Each release run's summary
+names the run its packages came from. The contract is
+[spec/spec-process-cicd-vcpkg-packages.md](../spec/spec-process-cicd-vcpkg-packages.md).
+
 ## What the editor relies on
 
 The update check ([`source/SceneryEditorX/update/`](../source/SceneryEditorX/update), window in
