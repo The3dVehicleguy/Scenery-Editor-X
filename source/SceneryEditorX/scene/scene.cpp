@@ -634,7 +634,11 @@ namespace SceneryEditorX
 		}
 
 		// Down the subtree; below an entity whose value didn't change nothing changes either (the root is always looked at)
-		std::vector<std::pair<entt::entity, bool>> stack = { { root, parentHidden } };
+		// One buffer for every call (main thread only, and nothing in here calls back in): hiding or isolating thousands of
+		// entities calls this once for each
+		static std::vector<std::pair<entt::entity, bool>> stack;
+		stack.clear();
+		stack.emplace_back(root, parentHidden);
 		constexpr size_t LIMIT = 4'000'000; // guards against relationship cycles
 		for (size_t visited = 0; !stack.empty() && visited < LIMIT; ++visited)
 		{

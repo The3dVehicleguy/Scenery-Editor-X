@@ -72,7 +72,9 @@ namespace SceneryEditorX
 
 	/**
 	 * @struct RelationshipComponent
-	 * @brief Component that stores parent-child relationships between entities.
+	 * @brief Component that stores parent-child relationships between entities. Link a parent with Entity::SetParent, or
+	 * call Scene::ParentChanged after setting pParentHandle yourself: the editor's hidden state (Entity::IsHiddenInTree)
+	 * reaches a child only through them.
 	 */
 	struct RelationshipComponent
 	{

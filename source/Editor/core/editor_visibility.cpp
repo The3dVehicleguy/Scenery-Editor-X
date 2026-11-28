@@ -430,8 +430,10 @@ namespace SceneryEditorX::EditorVisibility
 		}
 
 		/**
-		 * @brief The key a target is saved under (empty when it can't be: a row with no airport open). An entity's key is
-		 * worked out again while it is there (it may have been renamed or moved) and remembered for when it is gone.
+		 * @brief The key a target is saved under (empty when it can't be: a row with no airport open). An entity keeps the
+		 * key it had when it was hidden or locked (or found from a saved key): the scene entities that aren't project items
+		 * or apt.dat rows take their names and order from the data they are loaded from, and a rename in the editor isn't
+		 * saved, so after reopening the project that key is the one that matches again.
 		 */
 		std::string KeyOf(State &s, const Target &target, KeyIndex &index)
 		{
@@ -443,13 +445,12 @@ namespace SceneryEditorX::EditorVisibility
 					return s.appliedAirport.empty() ? std::string() : RowKey(s.appliedAirport, target);
 				case TargetType::Entity:
 				{
-					if (std::string key = EntityKey(target.entity, index); !key.empty())
-					{
+					if (const auto it = s.entityKeys.find(target.entity); it != s.entityKeys.end())
+						return it->second;
+					std::string key = EntityKey(target.entity, index);
+					if (!key.empty())
 						s.entityKeys[target.entity] = key;
-						return key;
-					}
-					const auto it = s.entityKeys.find(target.entity);
-					return it != s.entityKeys.end() ? it->second : std::string();
+					return key;
 				}
 			}
 			return {};

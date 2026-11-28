@@ -284,6 +284,11 @@ namespace SceneryEditorX::ProjectFile
 	 * project item, "row/<airport>/<kind>/<index>" an apt.dat row, group or airport, "entity/<name>/<name>#<n>" anything
 	 * else by the names on its path in the scene (#n: the nth of siblings with that name, from 0, when n > 0). A
 	 * project item's lock is SceneryItem::locked, not listed here.
+	 *
+	 * Entity paths are as stable as the data the scene is loaded from: they name entities by the names and order they are
+	 * loaded with (what the editor keeps when they were hidden or locked). If that data changes so that the names or the
+	 * order of same-named siblings differ (another scenery pack version, say), a key may name another entity or none.
+	 * Project items and apt.dat rows don't depend on it.
 	 */
 	struct ProjectViewState
 	{
