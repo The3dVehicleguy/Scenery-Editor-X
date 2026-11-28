@@ -110,6 +110,12 @@ namespace SceneryEditorX::Update
 	const ReleaseAsset *FindWindowsInstaller(const Release &release);
 
 	/**
+	 * @brief The version in a Windows setup's file name, SceneryEditorX-<version>-<channel>-Setup.exe (case-insensitive,
+	 * channel letters and digits). nullopt for any other name. FindWindowsInstaller and the download cleanup share it.
+	 */
+	std::optional<Version> InstallerFileVersion(std::string_view fileName);
+
+	/**
 	 * @brief The hash a sha256sum listing gives a file: lines "<64 hex>  name" or "<64 hex> *name" (binary mode),
 	 * blank lines and "#" comments skipped, the name compared case-insensitively. Lowercase hex, empty when the file
 	 * isn't listed.
@@ -117,8 +123,9 @@ namespace SceneryEditorX::Update
 	std::string FindChecksum(std::string_view listing, std::string_view fileName);
 
 	/**
-	 * @brief Whether a URL is a file of the repository's releases: https://github.com/<repository>/releases/download/...
-	 * (repository "owner/name", compared case-insensitively, as GitHub does). Downloads from anywhere else are refused.
+	 * @brief Whether a URL is a file of the repository's releases: https://github.com/<repository>/releases/download/<tag>/<file>
+	 * (repository "owner/name", compared case-insensitively, as GitHub does; tag and file letters, digits and . _ + -,
+	 * not starting with '.', no '%' escapes or further segments). Downloads from anywhere else are refused.
 	 */
 	bool IsReleaseDownloadUrl(std::string_view url, std::string_view repository);
 

@@ -242,6 +242,31 @@ TEST_CASE("Only the repository's release files are trusted downloads", "[update]
 	CHECK_FALSE(IsReleaseDownloadUrl(base + "v1/../../a.exe", REPOSITORY));
 	CHECK_FALSE(IsReleaseDownloadUrl(base + "v1/a b.exe", REPOSITORY));
 	CHECK_FALSE(IsReleaseDownloadUrl(base + "v1/a.exe", ""));
+
+	// Exactly <tag>/<file> after the prefix: no dot segments, escapes, extra segments, queries or fragments
+	CHECK(IsReleaseDownloadUrl(base + "v0.2.130.631/SHA256SUMS.txt", REPOSITORY));
+	CHECK(IsReleaseDownloadUrl(base + "v1.0+build_2/Scenery_Editor-X.exe", REPOSITORY));
+	for (const char *bad : { "..", "v1/..", "v1/.", "./a.exe", "../a.exe", "v1/./a.exe", "v1/%2e%2e/a.exe", "%2e%2e/a.exe",
+		"v1/a%20b.exe", "v1/sub/a.exe", "v1/", "v1", "/a.exe", "v1//a.exe", "v1/a.exe?x=1", "v1/a.exe#f", "v1/.hidden",
+		"v1/a.exe/" })
+	{
+		INFO(bad);
+		CHECK_FALSE(IsReleaseDownloadUrl(base + bad, REPOSITORY));
+	}
+}
+
+TEST_CASE("Setup file names give their version", "[update][release]")
+{
+	CHECK(InstallerFileVersion("SceneryEditorX-0.2.130.631-Alpha-Setup.exe")->ToString() == "0.2.130.631");
+	CHECK(InstallerFileVersion("sceneryeditorx-0.2.63-beta-setup.EXE")->ToString() == "0.2.63.0");
+	CHECK(InstallerFileVersion("SCENERYEDITORX-1.0.0.1-RC1-SETUP.EXE")->ToString() == "1.0.0.1");
+	for (const char *other : { "SceneryEditorX-garbage-Alpha-Setup.exe", "SceneryEditorX-0.2.1.2--Setup.exe",
+		"SceneryEditorX-0.2.1.2-Alpha-x64-Setup.exe", "SceneryEditorX-0.2.1.2-Setup.exe", "SceneryEditorX-0.2.1.2-Alpha-Setup.zip",
+		"Other-0.2.1.2-Alpha-Setup.exe", "SceneryEditorX-0.2.1.2-Alpha-Setup.exe.part", "latest_release.json", "" })
+	{
+		INFO(other);
+		CHECK_FALSE(InstallerFileVersion(other));
+	}
 }
 
 TEST_CASE("Only servers on this computer are test servers", "[update][url]")

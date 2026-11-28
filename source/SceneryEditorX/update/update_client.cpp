@@ -210,15 +210,14 @@ namespace SceneryEditorX::Update
 			const std::string agent = UserAgent();
 			char errorBuffer[CURL_ERROR_SIZE] = {};
 			curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-			// Plain http only for a test server on this computer (Init checks): redirects can't leave https otherwise
+			// Plain http only for a test server on this computer (Init checks), and only for its own address: redirects go
+			// to https only, a test server's too (GitHub's release files redirect to its https file host)
 #if LIBCURL_VERSION_NUM >= 0x075500	// 7.85: the string options; the bitmask ones are deprecated since
-			const char *protocols = testServer ? "http,https" : "https";
-			curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, protocols);
-			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, protocols);	// Release files redirect to GitHub's file host
+			curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, testServer ? "http,https" : "https");
+			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 #else	// An older system libcurl (Linux distributions)
-			const long protocols = testServer ? static_cast<long>(CURLPROTO_HTTP | CURLPROTO_HTTPS) : static_cast<long>(CURLPROTO_HTTPS);
-			curl_easy_setopt(curl, CURLOPT_PROTOCOLS, protocols);
-			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, protocols);
+			curl_easy_setopt(curl, CURLOPT_PROTOCOLS, testServer ? static_cast<long>(CURLPROTO_HTTP | CURLPROTO_HTTPS) : static_cast<long>(CURLPROTO_HTTPS));
+			curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, static_cast<long>(CURLPROTO_HTTPS));
 #endif
 			curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 			curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
@@ -540,7 +539,11 @@ namespace SceneryEditorX::Update
 #endif
 		}
 
-		/* @brief A file the client may download: one of the repository's release files, or one on a test server on this computer. */
+		/**
+		 * @brief A file the client may download: one of the repository's release files, or one on a test server on this
+		 * computer. The SHA-256 that checks a setup comes from the same trust: GitHub's API (https) and the repository's
+		 * own release files, or, with --update-url, the developer's own local server, which stands in for GitHub there.
+		 */
 		bool IsTrustedDownload(const std::string_view url, const bool testServer)
 		{
 			return IsReleaseDownloadUrl(url, REPOSITORY) || (testServer && IsLoopbackUrl(url));
@@ -718,6 +721,21 @@ namespace SceneryEditorX::Update
 			SEDX_CORE_INFO_TAG(LOG_TAG, "Downloaded {} to {} (SHA-256 checked)", installer.name, VFS::ToUtf8(target));
 		}
 
+		/* @brief ".part" in any letter case. */
+		bool InstallerPartialSuffix(const std::string_view suffix)
+		{
+			constexpr std::string_view PART = ".part";
+			if (suffix.size() != PART.size())
+				return false;
+			for (size_t i = 0; i < PART.size(); ++i)
+			{
+				const char c = suffix[i] >= 'A' && suffix[i] <= 'Z' ? static_cast<char>(suffix[i] - 'A' + 'a') : suffix[i];
+				if (c != PART[i])
+					return false;
+			}
+			return true;
+		}
+
 		/* @brief Leftovers of earlier updates: partial downloads, and setups of versions not newer than this one. */
 		void RemoveOldDownloads()
 		{
@@ -731,15 +749,12 @@ namespace SceneryEditorX::Update
 				if (!entry.is_regular_file(ec))
 					continue;
 				const std::string name = VFS::ToUtf8(entry.path().filename());
-				bool remove = name.ends_with(".part");
-				// SceneryEditorX-<version>-<channel>-Setup.exe
-				if (constexpr std::string_view PREFIX = "SceneryEditorX-"; name.starts_with(PREFIX) && name.ends_with("-Setup.exe"))
-				{
-					const size_t dash = name.find('-', PREFIX.size());
-					const std::optional<Version> version = ParseVersion(std::string_view(name).substr(PREFIX.size(), dash - PREFIX.size()));
-					remove = !version || *version <= running;
-				}
-				if (remove)
+				// A partial download, or a setup (named the way FindWindowsInstaller reads it, in any case) of a version
+				// not newer than this one. Anything else, a file someone put there included, is left alone.
+				// Only this client makes these (the download's name + ".part"); compared in any case all the same
+				const bool partial = name.size() > 5 && InstallerPartialSuffix(std::string_view(name).substr(name.size() - 5));
+				const std::optional<Version> version = InstallerFileVersion(name);
+				if (partial || (version && *version <= running))
 					fs::remove(entry.path(), ec);
 			}
 		}
@@ -827,7 +842,8 @@ namespace SceneryEditorX::Update
 	bool UpdateClient::CheckIfDue()
 	{
 		ClientState &s = S();
-		if (!s.initialized.load() || s.busy.load())
+		// The same busy guard StartWork takes: no check or download can start (and be overwritten) while the cache is read
+		if (!s.initialized.load() || s.busy.exchange(true))
 			return false;
 
 		std::string skipped;
@@ -840,6 +856,9 @@ namespace SceneryEditorX::Update
 		{
 			ChangeStatus([&](Status &status)
 			{
+				// Only over nothing newer: never over a downloaded (and locked) setup, a check's answer or a failed download
+				if (status.state != State::Idle && status.state != State::CheckFailed)
+					return;
 				status.checkedAt = cached->checkedAt;
 				if (cached->release)
 					ApplyRelease(status, *cached->release, false, true, skipped);
@@ -850,6 +869,7 @@ namespace SceneryEditorX::Update
 				}
 			});
 		}
+		s.busy.store(false);
 		if (cached && !IsCheckDue(cached->checkedAt, NowSeconds(), CHECK_INTERVAL_SECONDS))
 		{
 			SEDX_CORE_INFO_TAG(LOG_TAG, "Updates were checked less than a day ago: not asking GitHub again until then");

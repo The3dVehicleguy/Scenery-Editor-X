@@ -263,28 +263,31 @@ namespace SceneryEditorX::Update
 		return nullptr;
 	}
 
-	const ReleaseAsset *FindWindowsInstaller(const Release &release)
+	std::optional<Version> InstallerFileVersion(const std::string_view fileName)
 	{
 		constexpr std::string_view PREFIX = "sceneryeditorx-";
 		constexpr std::string_view SUFFIX = "-setup.exe";
+		const std::string name = ToLower(fileName);
+		if (name.size() <= PREFIX.size() + SUFFIX.size() || !name.starts_with(PREFIX) || !name.ends_with(SUFFIX))
+			return std::nullopt;
+		const std::string_view middle = std::string_view(name).substr(PREFIX.size(), name.size() - PREFIX.size() - SUFFIX.size());
+		const size_t dash = middle.find('-');
+		if (dash == std::string_view::npos)
+			return std::nullopt;
+		const std::string_view channel = middle.substr(dash + 1);
+		const bool channelOk = !channel.empty() && std::all_of(channel.begin(), channel.end(), [](const char c)
+		{
+			return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');	// "alpha", "beta", "rc1" (lowercased above)
+		});
+		return channelOk ? ParseVersion(middle.substr(0, dash)) : std::nullopt;
+	}
+
+	const ReleaseAsset *FindWindowsInstaller(const Release &release)
+	{
 		for (const ReleaseAsset &asset : release.assets)
 		{
-			// sceneryeditorx-<version>-<channel>-setup.exe: the version compared as a version, so a three-part one
-			// ("0.2.63") matches the tag's whether either is written with the build number (".0") or without
-			const std::string name = ToLower(asset.name);
-			if (name.size() <= PREFIX.size() + SUFFIX.size() || !name.starts_with(PREFIX) || !name.ends_with(SUFFIX))
-				continue;
-			const std::string_view middle = std::string_view(name).substr(PREFIX.size(), name.size() - PREFIX.size() - SUFFIX.size());
-			const size_t dash = middle.find('-');
-			if (dash == std::string_view::npos)
-				continue;
-			const std::optional<Version> version = ParseVersion(middle.substr(0, dash));
-			const std::string_view channel = middle.substr(dash + 1);
-			const bool channelOk = !channel.empty() && std::all_of(channel.begin(), channel.end(), [](const char c)
-			{
-				return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');	// "alpha", "beta", "rc1" (lowercased above)
-			});
-			if (version && *version == release.version && channelOk)
+			// Compared as versions, so a three-part one ("0.2.63") matches the tag's with the build number (".0") or without
+			if (const std::optional<Version> version = InstallerFileVersion(asset.name); version && *version == release.version)
 				return &asset;
 		}
 		return nullptr;
@@ -325,7 +328,25 @@ namespace SceneryEditorX::Update
 				return false;
 		}
 		const std::string prefix = "https://github.com/" + std::string(repository) + "/releases/download/";
-		return url.size() > prefix.size() && StartsWithNoCase(url, prefix) && url.find("/../") == std::string_view::npos;
+		if (url.size() <= prefix.size() || !StartsWithNoCase(url, prefix))
+			return false;
+
+		// Exactly <tag>/<file> after the prefix: two names of letters, digits and . _ + -, neither starting with '.'
+		// (so no "." or ".." segments), no '%' escapes, no further segments, query or fragment
+		const std::string_view rest = url.substr(prefix.size());
+		const size_t slash = rest.find('/');
+		if (slash == std::string_view::npos)
+			return false;
+		const auto validName = [](const std::string_view name)
+		{
+			if (name.empty() || name.front() == '.')
+				return false;
+			return std::all_of(name.begin(), name.end(), [](const char c)
+			{
+				return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '+' || c == '-';
+			});
+		};
+		return validName(rest.substr(0, slash)) && validName(rest.substr(slash + 1));
 	}
 
 	bool IsLoopbackUrl(const std::string_view url)
