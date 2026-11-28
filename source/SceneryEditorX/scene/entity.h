@@ -31,6 +31,7 @@
 // ReSharper disable CppInconsistentNaming
 #pragma once
 #include "scene.h"
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <string>
@@ -82,8 +83,32 @@ namespace SceneryEditorX
 		void SetActive(bool active);
 
 		/**
-		 * @brief 
-		 * @return 
+		 * @brief Whether the entity itself is hidden in the editor's view (SetHidden). Apart from the active flag, which
+		 * LOD switching and ANIM_hide keep changing. A hidden parent hides its children too: see IsHiddenInTree().
+		 */
+		[[nodiscard]] bool IsHidden() const;
+
+		/**
+		 * @brief Hides or shows the entity, and with it everything below it, in the view (the editor's hide / isolate),
+		 * without touching the active flag. The renderer, the GPU scene, the lights and framing skip what is hidden. Each
+		 * entity whose IsHiddenInTree() changes reaches the per-frame passes through Scene::MarkRenderStateChanged().
+		 * Main thread.
+		 * @param hidden New state.
+		 */
+		void SetHidden(bool hidden);
+
+		/**
+		 * @brief Hidden itself or below a hidden parent: a flag kept on each entity (SetHidden and Scene::ParentChanged
+		 * pass it down), so reading it walks nothing.
+		 */
+		[[nodiscard]] bool IsHiddenInTree() const;
+
+		/* @brief Active and not hidden in the tree: whether the renderer draws the entity (and lights it, for a light). */
+		[[nodiscard]] bool IsDrawn() const { return GetActive() && !IsHiddenInTree(); }
+
+		/**
+		 * @brief
+		 * @return
 		 */
 		[[nodiscard]] bool IsValid() const;
 
@@ -404,9 +429,18 @@ namespace SceneryEditorX
 		void SetParent(Entity parent)
 		{
 			auto& relationship = GetComponent<RelationshipComponent>();
+			// Off the old parent's list first: a stale entry would pass that parent's hidden state (and its destruction) on
+			if (static_cast<uint64_t>(relationship.pParentHandle) != 0)
+			{
+				if (Entity previous = Scene::TryGetEntityWithUUID(relationship.pParentHandle); previous && previous.m_EntityHandle != parent.m_EntityHandle)
+					std::erase(previous.GetComponent<RelationshipComponent>().pChildren, GetUUID());
+			}
 			relationship.pParentHandle = parent.GetUUID();
-			parent.GetComponent<RelationshipComponent>().pChildren.push_back(GetUUID());
+			std::vector<UUID> &siblings = parent.GetComponent<RelationshipComponent>().pChildren;
+			if (std::ranges::find(siblings, GetUUID()) == siblings.end())
+				siblings.push_back(GetUUID());
 			Scene::MarkStructureChanged();
+			Scene::ParentChanged(m_EntityHandle);
 		}
 
 	// -------------------------------------------------------
@@ -674,6 +708,7 @@ namespace SceneryEditorX
 		{
 			GetComponent<RelationshipComponent>().pParentHandle = std::move(parent);
 			Scene::MarkStructureChanged();
+			Scene::ParentChanged(m_EntityHandle);
 		}
 
 		/**
@@ -835,6 +870,8 @@ namespace SceneryEditorX
 		bool hasMatrixPrevious = false;
 
 		bool active = true; // SetActive(); read by the renderer when collecting draw calls
+		bool hidden = false; // SetHidden(): the editor's view-only hide, which children inherit
+		bool hiddenInTree = false; // hidden, or below a hidden entity (IsHiddenInTree; kept by Scene::PropagateHidden)
 		float timeSinceLastTransform = 0.0f; // Used for editor gizmo display and other transform-related time tracking (time in seconds)
 	};
 
@@ -868,6 +905,18 @@ namespace SceneryEditorX
 	{
 		const EntityRuntime *runtime = GetRuntime();
 		return runtime && runtime->active;
+	}
+
+	inline bool Entity::IsHidden() const
+	{
+		const EntityRuntime *runtime = GetRuntime();
+		return runtime && runtime->hidden;
+	}
+
+	inline bool Entity::IsHiddenInTree() const
+	{
+		const EntityRuntime *runtime = GetRuntime();
+		return runtime && runtime->hiddenInTree;
 	}
 
 	inline void Entity::SetActive(const bool active)

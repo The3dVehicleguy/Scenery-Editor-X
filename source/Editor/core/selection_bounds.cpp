@@ -207,7 +207,7 @@ namespace SceneryEditorX::SelectionBounds
 				if (Entity *entity = EditorScene::FindEntity(visit.handle))
 				{
 					Renderable *renderable = entity->GetComponent<Renderable>();
-					if (renderable && entity->GetActive())
+					if (renderable && entity->IsDrawn())
 						AddRenderable(*renderable, visit.world, drawn, budget);
 				}
 				// An apt.dat row's footprint (pavement, a painted line) frames even while its kind is hidden
@@ -358,7 +358,7 @@ namespace SceneryEditorX::SelectionBounds
 			}
 			--budget.entities;
 			Renderable *renderable = entity ? entity->GetComponent<Renderable>() : nullptr;
-			if (renderable && entity->GetActive() && !EditorScene::IsViewportCamera(static_cast<entt::entity>(*entity)))
+			if (renderable && entity->IsDrawn() && !EditorScene::IsViewportCamera(static_cast<entt::entity>(*entity)))
 				any |= AddRenderable(*renderable, entity->GetMatrix(), box, budget);
 		}
 		ReportSpent(budget, "the scene");

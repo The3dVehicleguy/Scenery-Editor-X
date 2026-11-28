@@ -31,6 +31,11 @@ msgid "Camera"
 msgstr ""
 
 #: source/Editor/core/editor_layer.cpp
+#: source/Editor/core/editor_updates.cpp
+msgid "Check for Updates..."
+msgstr ""
+
+#: source/Editor/core/editor_layer.cpp
 msgid "Choose a Navigation Keymap..."
 msgstr ""
 
@@ -329,6 +334,286 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
+#: source/Editor/core/editor_updates.cpp
+msgid "All Releases"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Asking GitHub for the newest release..."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "At most once a day, a few seconds after the editor starts, Scenery Editor X asks GitHub whether a newer release is out. The request tells GitHub this editor's version, nothing else. Help > Check for Updates asks at any time."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "At most once a day, a few seconds after the editor starts. The request tells GitHub this editor's version, nothing else"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#: source/Editor/core/project_dialogs.cpp
+#: source/Editor/core/project_hub.cpp
+msgid "Cancel"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Check Again"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Check Now"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Check for updates at startup"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Click to see what's new and update"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Close without saving? The unsaved project changes are kept as recovery data and offered when the project opens again."
+msgstr ""
+
+#. {} is the size of the setup in megabytes
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Download and Install ({} MB)"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Download the new version from the release page."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Downloaded, and its SHA-256 matches the release."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Downloading update..."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Downloading update: {}%"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Downloads the Windows setup from the release, checks it against the SHA-256 the release publishes, then offers to install it"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Install Without Saving"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Install and Close Editor"
+msgstr ""
+
+#. {} is the editor's version, e.g. 0.2.128.629
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Installed: {}"
+msgstr ""
+
+#. {} is a date and time, e.g. 2026-11-27 14:05 UTC
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Last checked {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Later"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Offer It Again"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Release Page"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Released {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Remind Me Later"
+msgstr ""
+
+#. {0} is the new version, {1} the installed one
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Scenery Editor X {0} is available. You have {1}."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Setup didn't start: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Setup updates Scenery Editor X once the editor has closed. It shows what it will do before it starts."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Skip This Version"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Skipped version: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "The download failed: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "The newest release is {}: this build is newer."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "The release has no notes."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "The update check failed: {}"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "This release has no Windows setup: download it from the release page."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Try Again"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Update ready to install"
+msgstr ""
+
+#. Help menu item; {} is the new version
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Update {} Available..."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "Update {} available"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "Updates haven't been checked yet."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "What's new"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "You chose to skip this version."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "You have the newest version of Scenery Editor X."
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+msgid "You have unsaved changes. Save them first: the editor closes when Setup starts."
+msgstr ""
+
+#. Download progress in megabytes, e.g. "12.5 of 40.2 MB" (the second form: size unknown)
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "{0} of {1} MB"
+msgstr ""
+
+#: source/Editor/core/editor_updates.cpp
+#, python-brace-format
+msgid "{} MB"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Change visibility of {} item"
+msgid_plural "Change visibility of {} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/editor_visibility.cpp
+msgid "Exit"
+msgstr ""
+
+#. undo steps (Edit > Undo ...); {} is the name of what was hidden, shown, locked or unlocked
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Hide {}"
+msgstr ""
+
+#. undo steps (Edit > Undo ...); {} is how many things were hidden, shown, locked or unlocked
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Hide {} item"
+msgid_plural "Hide {} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Isolated: {} item"
+msgid_plural "Isolated: {} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Lock {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Lock {} item"
+msgid_plural "Lock {} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show everything again ({})"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Show {} item"
+msgid_plural "Show {} items"
+msgstr[0] ""
+msgstr[1] ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Unlock {}"
+msgstr ""
+
+#: source/Editor/core/editor_visibility.cpp
+#, python-brace-format
+msgid "Unlock {} item"
+msgid_plural "Unlock {} items"
+msgstr[0] ""
+msgstr[1] ""
+
 #: source/Editor/core/editor_welcome.cpp
 msgid "Action"
 msgstr ""
@@ -416,6 +701,10 @@ msgstr ""
 
 #: source/Editor/core/editor_welcome.cpp
 msgid "Translations"
+msgstr ""
+
+#: source/Editor/core/editor_welcome.cpp
+msgid "Updates"
 msgstr ""
 
 #: source/Editor/core/editor_welcome.cpp
@@ -761,11 +1050,6 @@ msgstr ""
 
 #: source/Editor/core/project_dialogs.cpp
 msgid "Author"
-msgstr ""
-
-#: source/Editor/core/project_dialogs.cpp
-#: source/Editor/core/project_hub.cpp
-msgid "Cancel"
 msgstr ""
 
 #: source/Editor/core/project_dialogs.cpp
@@ -2041,9 +2325,67 @@ msgstr ""
 msgid "Add an entity to the scene"
 msgstr ""
 
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Hidden with a row above it, or by isolation"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Hide"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Hide in the view (it is still exported)"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Isolate"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+msgid "Lock"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Lock: can't be picked in the viewport, moved or edited"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Locked with a row above it"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Locked: unlock it to delete it"
+msgstr ""
+
 #. A panel title, shown in capitals: write it in capitals too if your script has them.
 #: source/Editor/panels/outliner_panel.cpp
 msgid "OUTLINER"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+#: source/Editor/panels/settings_panels.cpp
+msgid "Show"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+msgid "Show in the view"
+msgstr ""
+
+#: source/Editor/panels/outliner_panel.cpp
+#: source/Editor/panels/project_panel.cpp
+#: source/Editor/panels/properties_panel.cpp
+msgid "Unlock"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "(excluded from export)"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "(hidden)"
 msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
@@ -2079,6 +2421,14 @@ msgid "Elevation (m)"
 msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
+msgid "Exclude from Export"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Excluded items stay in the project but aren't drawn or exported to X-Plane (WorldEditor's hidden items)"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
 msgid "Export art from the project folder (real paths stay relative to it)"
 msgstr ""
 
@@ -2095,7 +2445,15 @@ msgid "From apt.dat"
 msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
-msgid "Hidden items stay in the project but aren't exported to X-Plane (and aren't drawn)"
+msgid "Hidden in the view only: it is still exported"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Include in Export"
+msgstr ""
+
+#: source/Editor/panels/project_panel.cpp
+msgid "Locked items can't be picked in the viewport, moved or edited"
 msgstr ""
 
 #: source/Editor/panels/project_panel.cpp
@@ -2244,6 +2602,10 @@ msgid "Lights"
 msgstr ""
 
 #: source/Editor/panels/properties_panel.cpp
+msgid "Locked"
+msgstr ""
+
+#: source/Editor/panels/properties_panel.cpp
 msgid "Move the camera to look at it"
 msgstr ""
 
@@ -2337,6 +2699,10 @@ msgstr ""
 
 #: source/Editor/panels/properties_panel.cpp
 msgid "X-Plane sign syntax, e.g. {@Y}A{@L}22{^r}"
+msgstr ""
+
+#: source/Editor/panels/properties_panel.cpp
+msgid "with a row above it"
 msgstr ""
 
 #: source/Editor/panels/scene_viewport.cpp
@@ -2893,10 +3259,6 @@ msgstr ""
 
 #: source/Editor/panels/settings_panels.cpp
 msgid "Sharpness"
-msgstr ""
-
-#: source/Editor/panels/settings_panels.cpp
-msgid "Show"
 msgstr ""
 
 #: source/Editor/panels/settings_panels.cpp

@@ -18,6 +18,11 @@ pwsh installer\windows\Build-Installer.ps1 -Build
 ```
 
 `-Build` builds the Release editor first. Leave it out to package the `bin\SceneryEditorX.exe` you already have.
+
+Releases are built by CI, not by hand: the release workflow runs `scripts\ci\build_release_windows.ps1`, which
+installs the vcpkg ports, configures and builds the Release editor (with the version in `source\resource.h`, no
+automatic increments), runs this script, starts the staged editor with `--check-vulkan`, and writes the setup's
+`.sha256` and `SHA256SUMS.txt`. It runs the same way here. See [docs/RELEASING.md](../docs/RELEASING.md).
 `-Channel Beta` changes the channel shown in the installer and its file name.
 
 The setup program lands in `build\installer\SceneryEditorX-<version>-<channel>-Setup.exe`. The version comes from

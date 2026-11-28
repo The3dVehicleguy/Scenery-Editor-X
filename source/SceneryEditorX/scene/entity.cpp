@@ -65,6 +65,18 @@ namespace SceneryEditorX
 	{
 	}
 
+	void Entity::SetHidden(const bool hidden)
+	{
+		EntityRuntime *runtime = GetRuntime();
+		if (!runtime || runtime->hidden == hidden)
+			return;
+		runtime->hidden = hidden;
+		Scene::CountHiddenEntity(hidden);
+
+		// The entity and what is below it: each one whose IsHiddenInTree() changes is re-read by the render passes
+		Scene::PropagateHidden(m_EntityHandle);
+	}
+
 	xMath::Matrix Entity::ComposeLocalMatrix(const TransformComponent &transformComponent)
 	{
 		const TransformComponent *transform = &transformComponent;

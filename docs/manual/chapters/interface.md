@@ -92,11 +92,11 @@ The layout is saved when you quit and restored the next time.
 The bar along the bottom shows:
 
 - **On the left:** *Ready*, or the latest warning (amber) or error (red), with the part of the editor it came from. Click it to open the **CONSOLE**.
-- **Next to it:** a progress bar while X-Plane objects load in the background.
+- **Next to it:** a progress bar while X-Plane objects load in the background, and, when a newer release of Scenery Editor X is out, *Update version available* (then the download's progress, then *Update ready to install*). Click it for **Software Update**.
 - **On the right:** frames per second, the frame time in milliseconds, the GPU memory in use, and the editor's version.
 
 ## Dialogs and modal windows
 
 A few tasks open a window in the middle of the screen that you finish before going back to the workspace: **New Project**, **Export Scenery Pack**, the unsaved-changes question when you close a project, and **Recover unsaved work** after a crash. <kbd>Esc</kbd> cancels most of them.
 
-**Edit › Preferences…** is a normal window you can leave open while you work. Its **Navigation** tab sets the keymap and camera options, and its **Tools** tab lists the editing shortcuts.
+**Edit › Preferences…** is a normal window you can leave open while you work. Its **Navigation** tab sets the keymap and camera options, its **Tools** tab lists the editing shortcuts, **Interface** picks the language, and **Updates** turns the update check at startup on or off.

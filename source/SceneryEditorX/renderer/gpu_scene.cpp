@@ -420,7 +420,7 @@ namespace SceneryEditorX
 			proxy.entity = entity;
 			proxy.handle = static_cast<entt::entity>(*entity);
 			proxy.live = true;
-			proxy.enabled = entity->GetActive();
+			proxy.enabled = entity->IsDrawn();
 			proxy.castsShadow = renderable.HasFlag(RenderableFlags::CastsShadows);
 			proxy.batch = AcquireBatch(s, key, renderable);
 			proxy.world = entity->GetMatrix();
@@ -585,7 +585,7 @@ namespace SceneryEditorX
 		void ReadRenderState(State &s, const uint32_t slot, uint32_t &validated)
 		{
 			Proxy &proxy = s.proxies[slot];
-			const bool enabled = proxy.entity->GetActive();
+			const bool enabled = proxy.entity->IsDrawn();
 			const bool castsShadow = proxy.renderable->HasFlag(RenderableFlags::CastsShadows);
 			if (enabled == proxy.enabled && castsShadow == proxy.castsShadow)
 				return;

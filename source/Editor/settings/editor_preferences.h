@@ -30,6 +30,7 @@
  */
 #pragma once
 #include <cstdint>
+#include <string>
 
 // -------------------------------------------------------
 
@@ -76,6 +77,10 @@ namespace SceneryEditorX
 			int preset = 1;				// ViewportCamera::ViewPreset (Top)
 		};
 		ViewportCameraState viewport2;
+
+		// Updates (Help > Check for Updates, Preferences > Updates; Editor/core/editor_updates.*)
+		bool checkForUpdates = true;	// Ask GitHub for a newer release at startup, at most once a day
+		std::string skippedUpdate;		// A release version the user chose to skip ("" for none)
 
 		/* @brief The preferences, loaded on first use. */
 		static EditorPreferences &Get();

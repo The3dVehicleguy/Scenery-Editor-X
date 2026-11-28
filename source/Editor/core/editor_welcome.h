@@ -36,8 +36,8 @@ namespace SceneryEditorX::EditorWelcome
 {
 	/**
 	 * The first-launch setup (pick a navigation keymap: Blender, 3ds Max or Maya) and the Preferences window it leads
-	 * to (Edit > Preferences): navigation keymap and options, the controls of the chosen keymap, and the interface
-	 * language.
+	 * to (Edit > Preferences): navigation keymap and options, the controls of the chosen keymap, the interface
+	 * language, and the update check (EditorUpdates).
 	 *
 	 * The welcome shows once, when the preferences say no keymap was chosen yet. Runs started with command-line flags
 	 * (self-tests, captures, scripted exports) skip it unless --welcome asks for it.
@@ -54,7 +54,8 @@ namespace SceneryEditorX::EditorWelcome
 	{
 		Navigation,
 		Tools,
-		Interface
+		Interface,
+		Updates
 	};
 
 	/* @brief Opens the Preferences window on a page. */

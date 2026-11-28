@@ -39,6 +39,7 @@
 #include "editor_selection.h"
 #include "editor_commands.h"
 #include "editor_theme.h"
+#include "editor_visibility.h"
 #include "facade_tool.h"
 #include "node_tool.h"
 #include "selection_bounds.h"
@@ -171,18 +172,42 @@ namespace SceneryEditorX::EditorTools
 			return it->second;
 		}
 
-		/* @brief The pick id nearest the cursor's pixel in a result, the terrain left out (0 when the region is empty). */
+		/**
+		 * @brief True for the ids of locked things (EditorVisibility): drawn, but clicks, hovers and boxes don't reach
+		 * them. Locked itself, below a locked row, or part of a locked project item or apt.dat row.
+		 */
+		bool IsLockedPick(const uint32_t pickId, std::unordered_map<uint32_t, bool> &cache)
+		{
+			if (pickId == 0 || !EditorVisibility::AnyLocked())
+				return false;
+			const auto [it, added] = cache.try_emplace(pickId, false);
+			if (added)
+			{
+				entt::registry *registry = EditorScene::GetRegistry();
+				const entt::entity handle = registry ? ScenePicking::Resolve(*registry, pickId) : entt::null;
+				if (handle != entt::null)
+				{
+					const uint64_t entity = EditorScene::GetID(handle);
+					const std::optional<Target> target = EditorSelection::FromPick(entity);
+					it->second = EditorVisibility::IsEntityLocked(entity) || (target && EditorVisibility::IsLocked(*target));
+				}
+			}
+			return it->second;
+		}
+
+		/* @brief The pick id nearest the cursor's pixel in a result, the terrain and locked things left out (0 when none). */
 		uint32_t NearestId(const ScenePicking::Result &result, const int centerX, const int centerY)
 		{
 			uint32_t best = 0;
 			int bestDistance = 1 << 30;
 			std::unordered_map<uint32_t, bool> terrain;
+			std::unordered_map<uint32_t, bool> locked;
 			for (uint32_t row = 0; row < result.height; ++row)
 			{
 				for (uint32_t column = 0; column < result.width; ++column)
 				{
 					const uint32_t id = result.ids[static_cast<size_t>(row) * result.width + column];
-					if (id == 0 || IsTerrainPick(id, terrain))
+					if (id == 0 || IsTerrainPick(id, terrain) || IsLockedPick(id, locked))
 						continue;
 					const int dx = static_cast<int>(result.x + column) - centerX;
 					const int dy = static_cast<int>(result.y + row) - centerY;
@@ -204,6 +229,10 @@ namespace SceneryEditorX::EditorTools
 				return std::nullopt;
 			const entt::entity handle = ScenePicking::Resolve(*registry, pickId);
 			if (handle == entt::null || XPlane::SceneTerrain::Contains(EditorScene::GetID(handle)))
+				return std::nullopt;
+			// Locked things are drawn but not picked (select them in the OUTLINER to unlock them)
+			std::unordered_map<uint32_t, bool> locked;
+			if (IsLockedPick(pickId, locked))
 				return std::nullopt;
 			return EditorSelection::FromPick(EditorScene::GetID(handle));
 		}

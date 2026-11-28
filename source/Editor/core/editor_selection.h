@@ -121,7 +121,7 @@ namespace SceneryEditorX::EditorSelection
 
 	/**
 	 * @brief True for what the tools can't change for good: the scenery pack's own DSF art around an airport (drawn
-	 * from the pack, not from data the editor saves).
+	 * from the pack, not from data the editor saves), and anything locked (EditorVisibility).
 	 */
 	bool IsReadOnly(const Target &target, std::string *reason = nullptr);
 

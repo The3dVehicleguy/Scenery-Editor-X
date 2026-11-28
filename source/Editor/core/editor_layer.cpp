@@ -39,6 +39,8 @@
 #include "editor_scene.h"
 #include "editor_selection.h"
 #include "editor_tools.h"
+#include "editor_updates.h"
+#include "editor_visibility.h"
 #include "editor_welcome.h"
 #include "project_dialogs.h"
 #include "project_hub.h"
@@ -299,12 +301,14 @@ namespace SceneryEditorX
 		ViewportMenus::RegisterCommands();
 		FacadeTool::RegisterCommands();
 		FacadeAuthoring::RegisterCommands();
+		EditorVisibility::RegisterCommands();	// After FacadeTool's: its item.lock covers every kind of target
 		BuildMainMenus();
 		// The viewports drive the camera (keymaps, several viewports): the engine camera reads no input of its own
 		Camera::SetInputExternal(true);
 		EditorCamera::CaptureHome();
 		EditorCamera::ReadCommandLine();
 		EditorWelcome::Init();
+		EditorUpdates::Init();	// The update check at startup (at most once a day) and Help > Check for Updates
 		UpdateWindowTitle();
 
 		if (!ImGui::GetCurrentContext())
@@ -327,6 +331,7 @@ namespace SceneryEditorX
 		// The UI layer (an overlay) detaches first, so ImGui is already gone here: no ImGui calls.
 		Camera::SetInputEnabled(true);
 		Camera::SetInputExternal(false);
+		EditorUpdates::Shutdown();	// Stops a check or download in progress
 		EditorSettingsSerializer::Shutdown();	// The tools' snapping and gizmo options, when they changed
 		m_PanelManager.reset();
 		AssetThumbnails::Shutdown();	// Before the renderer frees the device: the thumbnail atlas is on the GPU
@@ -441,8 +446,11 @@ namespace SceneryEditorX
 
 		// Selection: follow what other panels selected last frame, drop what rebuilds removed
 		EditorSelection::Sync(&m_Context);
+		// Hide, isolate and lock: applied to the entities the rebuilds above made, before anything draws or picks
+		EditorVisibility::Tick(&m_Context);
 
 		HandleShortcuts();
+		EditorUpdates::Tick();	// The startup update check, and its window once the startup modals are closed
 
 		// Order matters: each side bar shrinks the viewport work area the dockspace then fills.
 		DrawMenuBar();
@@ -521,6 +529,7 @@ namespace SceneryEditorX
 		}
 
 		DrawAboutPopup();
+		EditorUpdates::Draw();	// Software Update
 		EditorWelcome::Draw();	// First-launch keymap choice and Edit > Preferences
 		DrawDebugWindows();
 		EditorAirports::DrawModals(&m_Context);
@@ -542,6 +551,7 @@ namespace SceneryEditorX
 		{
 			if (ImGui::MenuItem(TrL("About Scenery Editor X")))
 				m_ShowAbout = true;
+			EditorUpdates::DrawMenuItems();
 			if (ImGui::MenuItem(TrL("Choose a Navigation Keymap...")))
 				EditorWelcome::OpenWelcome();
 			if (ImGui::MenuItem(TrL("Controls && Shortcuts...")))
@@ -590,9 +600,10 @@ namespace SceneryEditorX
 		if (ImGui::MenuItem(EditorUI::IconLabel(SEDX_ICON_CROSSHAIRS, "Frame Selection").c_str(), "F", false, !EditorSelection::IsEmpty()))
 			EditorTools::FrameSelection();
 		ImGui::Separator();
+		EditorVisibility::DrawMenuItems(&m_Context);
+		ImGui::Separator();
 		EditorCommands::MenuItem("item.hide", &m_Context);
 		EditorCommands::MenuItem("item.unhide_all", &m_Context);
-		EditorCommands::MenuItem("item.lock", &m_Context);
 		ImGui::Separator();
 		for (int t = 0; t < static_cast<int>(EditorTools::Tool::Count); ++t)
 		{
@@ -612,6 +623,8 @@ namespace SceneryEditorX
 			if (const uint64_t created = EditorScene::CreateEmpty("Empty Entity"); created != 0)
 				EditorSelection::Select(&m_Context, EditorSelection::Target::ForEntity(created));
 		}
+		ImGui::Separator();
+		EditorVisibility::DrawMenuItems(&m_Context);
 	}
 
 	void EditorLayer::DrawXPlaneMenu()
@@ -830,6 +843,9 @@ namespace SceneryEditorX
 			ImGui::SameLine(0.0f, 20.0f * dpi);
 			EditorXPlane::DrawObjectLoadProgress(260.0f * dpi);
 
+			// An update found or downloading (click: Software Update)
+			EditorUpdates::DrawStatusBarItem(20.0f * dpi);
+
 			// Right: frame time, GPU memory, version
 			// GPU memory walks every allocation; twice a second is plenty for a status readout.
 			static GPUMemoryStats s_Memory;
@@ -1032,6 +1048,12 @@ namespace SceneryEditorX
 			ImGui::Spacing();
 			ImGui::TextDisabled("Dear ImGui %s (docking)", IMGUI_VERSION);
 			ImGui::Spacing();
+			if (ImGui::Button(TrL("Check for Updates...##About")))
+			{
+				EditorUpdates::CheckNow();
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SameLine();
 			if (ImGui::Button("Close", ImVec2(120.0f * ImGui::GetStyle().FontScaleDpi, 0.0f)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
 				ImGui::CloseCurrentPopup();
 			ImGui::EndPopup();
@@ -1067,6 +1089,9 @@ namespace SceneryEditorX
 
 		// Camera: numpad views, Home, and the keymap's own keys (over the viewport)
 		EditorCamera::HandleShortcuts(&m_Context);
+
+		// Hide / show / isolate (the keymap's keys, wherever the keyboard isn't typing)
+		EditorVisibility::HandleShortcuts(&m_Context);
 
 		// The open project (which saves its airport too), else the open airport
 		if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_N, ImGuiInputFlags_RouteGlobal))

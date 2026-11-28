@@ -39,6 +39,7 @@
 #include "components/lights.h"
 #include "components/wind.h"
 #include <algorithm>
+#include <atomic>
 #include <unordered_set>
 #include <filesystem>
 #include <Editor/modules/scene_render.h>
@@ -70,6 +71,7 @@ namespace SceneryEditorX
 	static uint64_t s_StructureVersion = 1;            // see Scene::GetStructureVersion()
 	static uint64_t s_EntityListsVersion = 0;          // structure version the cached lists were built at
 	static uint64_t s_DestroyVersion = 1;              // see Scene::GetDestroyVersion()
+	static std::atomic<uint32_t> s_HiddenEntityCount = 0; // see Scene::GetHiddenEntityCount() (written on the main thread)
 	static std::vector<EntityRuntime*> s_DestroyedEntities; // destroyed, still listed in s_EntityPointers (CompactEntityPointers)
 	static BoundingBox s_BoundingBox = BoundingBox::UNIT;
 	static std::string s_FilePath;
@@ -391,9 +393,12 @@ namespace SceneryEditorX
 				EntityRuntime &runtime = s_RuntimeChunks[chunk][i];
 				runtime.components = {};
 				runtime.entity.m_EntityHandle = entt::null;
+				runtime.hidden = false;
+				runtime.hiddenInTree = false;
 				s_FreeRuntimes.push_back(&runtime);
 			}
 		}
+		s_HiddenEntityCount = 0;
 		s_RenderableEntities.clear();
 		s_LightEntities.clear();
 		s_RenderableMaterials.clear();
@@ -589,6 +594,92 @@ namespace SceneryEditorX
 		return s_DestroyVersion;
 	}
 
+	uint32_t Scene::GetHiddenEntityCount()
+	{
+		return s_HiddenEntityCount.load(std::memory_order_relaxed);
+	}
+
+	void Scene::CountHiddenEntity(const bool hidden)
+	{
+		if (hidden)
+		{
+			s_HiddenEntityCount.fetch_add(1, std::memory_order_relaxed);
+			return;
+		}
+		// Down by one, never below zero (one atomic step: a load then a subtract could race)
+		uint32_t count = s_HiddenEntityCount.load(std::memory_order_relaxed);
+		while (count > 0 && !s_HiddenEntityCount.compare_exchange_weak(count, count - 1, std::memory_order_relaxed))
+		{
+		}
+	}
+
+	void Scene::PropagateHidden(const entt::entity root)
+	{
+		if (!s_ActiveScene)
+			return;
+		entt::registry &registry = s_ActiveScene->m_Registry;
+		if (!registry.valid(root))
+			return;
+
+		// The parent's state is what the root inherits
+		bool parentHidden = false;
+		if (const RelationshipComponent *relationship = registry.try_get<RelationshipComponent>(root);
+			relationship && static_cast<uint64_t>(relationship->pParentHandle) != 0)
+		{
+			if (const auto it = s_ActiveScene->m_EntityMap.find(relationship->pParentHandle); it != s_ActiveScene->m_EntityMap.end())
+			{
+				if (const EntityRuntime *parent = FindRuntime(it->second, s_ActiveScene.get()))
+					parentHidden = parent->hiddenInTree;
+			}
+		}
+
+		// Down the subtree; below an entity whose value didn't change nothing changes either (the root is always looked at)
+		// One buffer for every call on a thread (nothing in here calls back in): hiding or isolating thousands of entities
+		// calls this once for each. thread_local keeps it safe should a caller ever be off the main thread.
+		thread_local std::vector<std::pair<entt::entity, bool>> stack;
+		stack.clear();
+		stack.emplace_back(root, parentHidden);
+		constexpr size_t LIMIT = 4'000'000; // guards against relationship cycles
+		size_t visited = 0;
+		for (; !stack.empty() && visited < LIMIT; ++visited)
+		{
+			const auto [handle, inherited] = stack.back();
+			stack.pop_back();
+			EntityRuntime *runtime = FindRuntime(handle, s_ActiveScene.get());
+			if (!runtime)
+				continue;
+			const bool hiddenInTree = runtime->hidden || inherited;
+			if (hiddenInTree == runtime->hiddenInTree && handle != root)
+				continue;
+			if (hiddenInTree != runtime->hiddenInTree)
+			{
+				runtime->hiddenInTree = hiddenInTree;
+				MarkRenderStateChanged(handle);
+			}
+			if (const RelationshipComponent *relationship = registry.try_get<RelationshipComponent>(handle))
+			{
+				for (const UUID &child : relationship->pChildren)
+				{
+					const auto it = s_ActiveScene->m_EntityMap.find(child);
+					if (it != s_ActiveScene->m_EntityMap.end() && registry.valid(it->second))
+						stack.emplace_back(it->second, hiddenInTree);
+				}
+			}
+		}
+		// Only a relationship cycle (an entity below itself) gets here with work left: say so instead of stopping quietly
+		if (!stack.empty())
+			SEDX_CORE_WARN_TAG("Scene", "Hidden state not passed on below entity {}: its children loop back to it (a relationship cycle)",
+				static_cast<uint32_t>(root));
+	}
+
+	void Scene::ParentChanged(const entt::entity child)
+	{
+		// Nothing is hidden: every hiddenInTree is false already, and a new link keeps it so
+		if (GetHiddenEntityCount() == 0)
+			return;
+		PropagateHidden(child);
+	}
+
 	bool Scene::SaveToFile(std::string filePath)
 	{
 		if (filePath.empty())
@@ -696,6 +787,14 @@ namespace SceneryEditorX
 		// has left s_EntityPointers.
 		if (EntityRuntime *runtime = FindRuntime(entityHandle, s_ActiveScene.get()))
 		{
+			// Its children were destroyed above, so none is left holding the hiddenInTree this entity gave it. Should a
+			// path ever keep the children (reparenting them on delete), it must call ParentChanged for each.
+			if (runtime->hidden)
+			{
+				runtime->hidden = false;
+				CountHiddenEntity(false);
+			}
+			runtime->hiddenInTree = false;
 			runtime->components = {};
 			runtime->entity.m_EntityHandle = entt::null;
 			s_RuntimeByIndex[RuntimeIndex(entityHandle)] = nullptr;

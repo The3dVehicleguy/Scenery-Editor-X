@@ -37,6 +37,7 @@
 #include "editor_theme.h"
 #include "editor_tools.h"
 #include "editor_ui.h"
+#include "editor_visibility.h"
 #include "facade_authoring.h"
 #include "transform_tool.h"
 #include <algorithm>
@@ -184,7 +185,7 @@ namespace SceneryEditorX::FacadeTool
 
 		/**
 		 * @brief Changes items as one undo step. `edit` returns false when it changed nothing (the item is put back as it
-		 * was then). Locked items are left alone.
+		 * was then). Locked items (or items below something locked) are left alone.
 		 */
 		bool EditItems(const std::vector<std::string> &ids, const std::string &label, const std::function<bool(SceneryItem &)> &edit)
 		{
@@ -195,7 +196,7 @@ namespace SceneryEditorX::FacadeTool
 			for (const std::string &id : ids)
 			{
 				SceneryItem *item = document->FindItem(id);
-				if (!item || item->locked)
+				if (!item || EditorVisibility::IsLocked(EditorSelection::Target::ForItem(id)))
 					continue;
 				SceneryItem before = *item;
 				if (!edit(*item))
@@ -1966,14 +1967,16 @@ namespace SceneryEditorX::FacadeTool
 			} });
 		EditorCommands::Register({ "item.duplicate", "Duplicate", SEDX_ICON_FILES_O, "Ctrl+D", "Copies of the selected project items, 3 m south-east", hasItems, nullptr,
 			[](EditorContext *context) { Duplicate(context, SelectedItems()); } });
-		EditorCommands::Register({ "item.hide", "Hide Selection", SEDX_ICON_EYE_SLASH, "", "Hidden items aren't drawn or exported", hasItems, nullptr,
+		EditorCommands::Register({ "item.hide", "Exclude from Export", SEDX_ICON_BAN, "",
+			"Excluded items stay in the project but aren't drawn or exported to X-Plane (WorldEditor's hidden items). To hide something "
+			"in the view only, use Hide Selected", hasItems, nullptr,
 			[](EditorContext *context)
 			{
 				const std::vector<std::string> items = SelectedItems();
 				EditorSelection::Clear(context);
-				EditItems(items, "Hide " + std::to_string(items.size()) + " items", [](SceneryItem &item) { if (item.hidden) return false; item.hidden = true; return true; });
+				EditItems(items, "Exclude " + std::to_string(items.size()) + " items from export", [](SceneryItem &item) { if (item.hidden) return false; item.hidden = true; return true; });
 			} });
-		EditorCommands::Register({ "item.unhide_all", "Show All Hidden", SEDX_ICON_EYE, "", "Show every hidden project item",
+		EditorCommands::Register({ "item.unhide_all", "Include All in Export", SEDX_ICON_UPLOAD, "", "Draw and export every project item excluded from export",
 			[](EditorContext *)
 			{
 				const ProjectFile::ProjectDocument *document = EditorProjects::GetDocument();
@@ -1989,34 +1992,7 @@ namespace SceneryEditorX::FacadeTool
 				ProjectFile::ProjectDocument *document = EditorProjects::GetDocument();
 				std::vector<std::string> hidden;
 				document->GetProject().ForEachItem([&hidden](const SceneryItem &item, int) { if (item.hidden) hidden.push_back(item.id); return true; });
-				EditItems(hidden, "Show " + std::to_string(hidden.size()) + " hidden items", [](SceneryItem &item) { item.hidden = false; return true; });
-			} });
-		EditorCommands::Register({ "item.lock", "Lock / Unlock", SEDX_ICON_LOCK, "", "Locked items can't be moved or edited", hasItems,
-			[](EditorContext *)
-			{
-				const std::vector<std::string> items = SelectedItems();
-				return !items.empty() && std::ranges::all_of(items, [](const std::string &id) { const SceneryItem *item = FindItem(id); return item && item->locked; });
-			},
-			[](EditorContext *)
-			{
-				// EditItems leaves locked items alone, so this edits the document directly as one step
-				ProjectFile::ProjectDocument *document = EditorProjects::GetDocument();
-				const std::vector<std::string> items = SelectedItems();
-				const bool lock = !std::ranges::all_of(items, [](const std::string &id) { const SceneryItem *item = FindItem(id); return item && item->locked; });
-				EditChanges::ChangeSet changes = EditChanges::Begin();
-				for (const std::string &id : items)
-				{
-					if (SceneryItem *item = document ? document->FindItem(id) : nullptr; item && item->locked != lock)
-					{
-						SceneryItem before = *item;
-						item->locked = lock;
-						changes.items.push_back({ std::move(before), *item });
-					}
-				}
-				if (changes.items.empty())
-					return;
-				EditChanges::Publish(changes);
-				EditChanges::Record(lock ? "Lock items" : "Unlock items", std::move(changes));
+				EditItems(hidden, "Include " + std::to_string(hidden.size()) + " items in export", [](SceneryItem &item) { item.hidden = false; return true; });
 			} });
 	}
 }

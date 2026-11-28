@@ -96,6 +96,10 @@ SceneryEditorX.exe --project "D:\Scenery\KSEA Seattle\KSEA Seattle.edX" --env-ti
 | Option | Effect |
 |---|---|
 | `--check-vulkan` | Checks Vulkan the way the renderer will and exits without opening a window. Exit codes below. |
+| `--no-update-check` | No update check at startup (Help › Check for Updates… still works). Runs started with other options don't check either, apart from `--project`. |
+| `--check-updates` | Checks for updates a few seconds after startup, even with other options and whatever the preferences say, and opens **Software Update** with the answer. |
+| `--update-url <url>` | Reads the newest release from this address instead of GitHub (developers). A test server on this computer (`127.0.0.1` or `[::1]`; not the name `localhost`) may use plain `http` and serve its own downloads; any other address must use `https`, and downloads still come only from the project's GitHub releases. |
+| `--update-download` | With `--check-updates`: downloads the update the check finds and checks its SHA-256, as **Download and Install** does, without installing it (developers). |
 | `--perf-log` | Writes frame timings to the log every two seconds. |
 | `--verbose` | More detail in the log. |
 | `--renderdoc` | Loads RenderDoc's capture library at startup (developers; RenderDoc must be installed). |

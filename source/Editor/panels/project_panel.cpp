@@ -36,6 +36,7 @@
 #include <Editor/core/project_dialogs.h>
 #include <Editor/core/editor_theme.h>
 #include <Editor/core/editor_ui.h>
+#include <Editor/core/editor_visibility.h>
 #include <SceneryEditorX/filesystem/vfs.h>
 #include <SceneryEditorX/logging/logging.hpp>
 #include <SceneryEditorX/renderer/font/font_awesome.h>
@@ -305,9 +306,15 @@ namespace SceneryEditorX
 			flags |= ImGuiTreeNodeFlags_Selected;
 
 		std::string label = EditorUI::IconLabel(KindIcon(item.kind), item.name.empty() ? GetItemKindName(item.kind) : item.name.c_str());
+		const EditorSelection::Target itemTarget = EditorSelection::Target::ForItem(item.id);
+		const bool viewHidden = EditorVisibility::IsHidden(itemTarget);
 		if (item.hidden)
-			label += "  (hidden)";
-		ImGui::PushStyleColor(ImGuiCol_Text, item.hidden ? Color(EditorTheme::Palette::TextDisabled) : ImGui::GetStyleColorVec4(ImGuiCol_Text));
+			label += std::string("  ") + Tr("(excluded from export)");
+		else if (viewHidden)
+			label += std::string("  ") + Tr("(hidden)");
+		if (item.locked)
+			label += std::string("  ") + SEDX_ICON_LOCK;
+		ImGui::PushStyleColor(ImGuiCol_Text, item.hidden || viewHidden ? Color(EditorTheme::Palette::TextDisabled) : ImGui::GetStyleColorVec4(ImGuiCol_Text));
 		const bool open = ImGui::TreeNodeEx("##Item", flags, "%s", label.c_str());
 		ImGui::PopStyleColor();
 		// A double-click's second press is a click too: it frames instead of selecting again (a Ctrl toggle would take
@@ -337,17 +344,23 @@ namespace SceneryEditorX
 
 		if (ImGui::BeginPopupContextItem("##ItemMenu"))
 		{
-			if (ImGui::MenuItem(item.hidden ? "Show" : "Hide"))
+			// An airport draws through the airport scene: its row in the OUTLINER hides it
+			if (item.kind != ItemKind::Airport)
+			{
+				if (ImGui::MenuItem(EditorUI::IconLabel(viewHidden ? SEDX_ICON_EYE : SEDX_ICON_EYE_SLASH, viewHidden ? Text("Show") : Text("Hide")).c_str()))
+					EditorVisibility::SetHidden(m_Context, { itemTarget }, !viewHidden);
+				EditorUI::ItemTooltip("Hidden in the view only: it is still exported");
+			}
+			if (ImGui::MenuItem(EditorUI::IconLabel(item.locked ? SEDX_ICON_UNLOCK : SEDX_ICON_LOCK, item.locked ? Text("Unlock") : Text("Lock")).c_str()))
+				EditorVisibility::SetLocked(m_Context, { itemTarget }, !item.locked);
+			EditorUI::ItemTooltip("Locked items can't be picked in the viewport, moved or edited");
+			ImGui::Separator();
+			if (ImGui::MenuItem(EditorUI::IconLabel(item.hidden ? SEDX_ICON_UPLOAD : SEDX_ICON_BAN, item.hidden ? Text("Include in Export") : Text("Exclude from Export")).c_str()))
 			{
 				item.hidden = !item.hidden;
 				EditorProjects::MarkEdited(Section::Items);
 			}
-			EditorUI::ItemTooltip("Hidden items stay in the project but aren't exported to X-Plane (and aren't drawn)");
-			if (ImGui::MenuItem(item.locked ? "Unlock" : "Lock"))
-			{
-				item.locked = !item.locked;
-				EditorProjects::MarkEdited(Section::Items);
-			}
+			EditorUI::ItemTooltip("Excluded items stay in the project but aren't drawn or exported to X-Plane (WorldEditor's hidden items)");
 			ImGui::Separator();
 			if (ImGui::MenuItem(EditorUI::IconLabel(SEDX_ICON_TRASH, "Remove from project").c_str()))
 				m_PendingRemove = item.id;

@@ -221,8 +221,9 @@ namespace SceneryEditorX::ViewportMenus
 		Panels BuildPanels(EditorContext *context, const std::optional<Target> &target, const std::optional<Point3> &ground)
 		{
 			Panels panels;
-			panels[TopRight] = { "DISPLAY", { Command("edit.frame"), Command("item.hide"), Command("item.unhide_all"), Command("item.lock"), Separator(),
-				Command("facade.labels"), Command("view.reset_camera") } };
+			panels[TopRight] = { "DISPLAY", { Command("edit.frame"), Command("view.hide_selected"), Command("view.hide_unselected"), Command("view.show_all"),
+				Command("view.isolate"), Separator(), Command("item.lock"), Command("view.unlock_all"), Separator(), Command("facade.labels"),
+				Command("view.reset_camera") } };
 			panels[BottomRight] = { "TRANSFORM", { Command("tool.select"), Command("tool.move"), Command("tool.rotate"), Command("tool.scale"), Command("tool.nodes"),
 				Command("facade.tool"), Separator(), Command("item.duplicate"), Command("edit.delete"), Command("edit.deselect") } };
 

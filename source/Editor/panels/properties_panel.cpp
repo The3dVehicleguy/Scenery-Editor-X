@@ -34,6 +34,7 @@
 #include <Editor/core/editor_theme.h>
 #include <Editor/core/editor_tools.h>
 #include <Editor/core/editor_ui.h>
+#include <Editor/core/editor_visibility.h>
 #include <Editor/core/editor_xplane.h>
 #include <Editor/core/facade_tool.h>
 #include <Editor/core/node_tool.h>
@@ -795,6 +796,26 @@ namespace SceneryEditorX
 			}
 			else
 			{
+				// Locked (itself or with a row above it): shown, not edited, until it is unlocked
+				const EditorSelection::Target *activeTarget = EditorSelection::GetActive();
+				const bool locked = activeTarget && EditorVisibility::IsLocked(*activeTarget);
+				if (locked)
+				{
+					ImGui::AlignTextToFramePadding();
+					ImGui::TextUnformatted(EditorUI::IconLabel(SEDX_ICON_LOCK, "Locked").c_str());
+					ImGui::SameLine();
+					if (EditorVisibility::IsLockedSelf(*activeTarget))
+					{
+						if (ImGui::SmallButton(TrL("Unlock##properties")))
+							EditorVisibility::SetLocked(m_Context, { *activeTarget }, false);
+					}
+					else
+					{
+						ImGui::TextDisabled("%s", Tr("with a row above it"));
+					}
+					ImGui::BeginDisabled();
+				}
+
 				if (EditorUI::SectionHeader("GENERAL PROPERTIES") && EditorUI::BeginPropertyGrid("##General"))
 				{
 					if (TagComponent *tag = EditorScene::TryGet<TagComponent>(handle))
@@ -866,6 +887,8 @@ namespace SceneryEditorX
 
 				DrawXPlaneObject(m_Context, m_Context ? m_Context->selectedEntity : 0);
 				DrawAirportElement(m_Context, m_Context ? m_Context->selectedEntity : 0);
+				if (locked)
+					ImGui::EndDisabled();
 
 				if (EditorUI::SectionHeader("COMPONENTS"))
 				{

@@ -66,12 +66,26 @@ A field commits when you press <kbd>Enter</kbd> or leave it, and every commit is
 | **Duplicate** | <kbd>Ctrl+D</kbd> | Edit menu, quad menu | Copies the selected project items, 3 m to the south-east, and selects the copies. |
 | **Deselect** | <kbd>Esc</kbd> | Edit menu, quad menu | Clears the selection (or cancels the drawing in progress). |
 | **Frame Selection** | <kbd>F</kbd> (also <kbd>Z</kbd> in 3ds Max), <kbd>Numpad .</kbd> | Edit menu, quad menu, double-click in the OUTLINER or PROJECT hierarchy | Moves the camera so the whole selection fills the view, and makes its center the pivot: models, rows, picked nodes, folders and groups. <kbd>F</kbd> works from the panels too. See [Framing the selection](viewport-navigation.md#framing-the-selection). |
-| **Hide Selection** | | Edit menu, quad menu | Hidden items stay in the project but aren't drawn or exported. |
-| **Show All Hidden** | | Edit menu, quad menu | Shows every hidden project item again. |
-| **Lock / Unlock** | | Edit menu, quad menu | Locked items can't be moved or edited until you unlock them. |
+| **Hide Selected**, **Hide Unselected**, **Show All** | <kbd>H</kbd>, <kbd>Shift+H</kbd>, <kbd>Alt+H</kbd> | Edit and Scene menus, quad menu, OUTLINER | Hide in the view only. See [Hiding, isolating and locking](#hiding-isolating-and-locking). |
+| **Isolate Selection** | <kbd>Numpad /</kbd> or <kbd>Alt+Q</kbd> | Edit and Scene menus, quad menu, OUTLINER | Shows only the selection until you press it again. |
+| **Lock / Unlock**, **Unlock All** | | Edit and Scene menus, quad menu, OUTLINER, PROJECT hierarchy | Locked things can't be picked in the viewport, moved or edited until you unlock them. |
+| **Exclude from Export**, **Include All in Export** | | Edit menu, PROJECT hierarchy | Excluded project items stay in the project but aren't drawn or exported. |
 | **Reverse Direction** | | quad menu, Nodes toolbar | Lines, strings and facades run (and face) the other way. |
 
-Hiding and locking are also in the right-click menu of each item in the PROJECT panel's hierarchy.
+Hiding, locking and excluding from export are also in the right-click menu of each item in the PROJECT panel's hierarchy.
+
+## Hiding, isolating and locking
+
+**Hiding** takes things out of the view while you work: hidden things aren't drawn, highlighted, picked, box-selected or framed, and they leave the selection, but they are still exported. Hide a row in the OUTLINER with its eye, or the selection with **Hide Selected** (<kbd>H</kbd>); **Hide Unselected** (<kbd>Shift+H</kbd>) hides everything else except the ground and the lights, and **Show All** (<kbd>Alt+H</kbd>) brings everything back. In the Maya keymap the keys are <kbd>Ctrl+H</kbd>, <kbd>Alt+H</kbd> and <kbd>Ctrl+Shift+H</kbd>. A hidden row hides everything below it, including things added under it later.
+
+**Isolating** shows only the selection, over the base terrain and with the scene's lights, until you end it: press **Isolate Selection** (<kbd>Numpad /</kbd> or <kbd>Alt+Q</kbd>; also <kbd>Shift+I</kbd> in the Maya keymap) again, or click **Exit** in the notice at the top of the viewport. What was shown and hidden before comes back as it was.
+
+**Locking** protects finished work: locked things are still drawn, but the viewport doesn't highlight, pick or box-select them, and the tools don't move, edit or delete them. Select a locked row in the OUTLINER to read its properties, shown greyed out, and click **Unlock** there, or use **Unlock All**.
+
+What is hidden and locked is saved with the project, so it opens the way you left it; isolation isn't saved. Hiding and locking are undoable. A project item's **Exclude from Export** is different from hiding: an excluded item isn't drawn and isn't exported to X-Plane, like a hidden item in WorldEditor.
+
+> [!NOTE]
+> Scenery that isn't a project item or an airport row (the terrain, the scenery pack's objects) is remembered by its name and its place among siblings with the same name. If the scenery pack changes, a saved hide or lock may land on another object or none.
 
 ## The quad menu
 
@@ -79,11 +93,11 @@ Right-click in the viewport (a quick click, without dragging) to open the **quad
 
 ![The quad menu over a selected facade: FACADE and REBUILD on the left, DISPLAY and TRANSFORM on the right.](../images/diagram-quad-menu.svg "The quad menu's four parts.")
 
-- **Top right, DISPLAY:** frame, hide, show all, lock, wall labels, reset camera.
+- **Top right, DISPLAY:** frame, hide selected, hide unselected, show all, isolate, lock / unlock, unlock all, wall labels, reset camera.
 - **Bottom right, TRANSFORM:** the tools, duplicate, delete, deselect.
 - **Top left:** what you clicked.
   - a facade: **FACADE**: wall type (for the picked walls), height, replace with another facade, pick walls, make the picked wall the front, draw with this facade, inspect, edit in the facade editor;
-  - another project item: its kind, with the Nodes tool, reverse, duplicate and hide;
+  - another project item: its kind, with the Nodes tool, reverse, duplicate and exclude from export;
   - an airport element: **AIRPORT**: what it is, the Nodes tool, reverse and frame;
   - empty ground: **CREATE**: draw a facade as a rectangle, polygon, circle or line, place the armed facade right here, and the facade library.
 - **Bottom left:** for a facade, **REBUILD** (subdivide curved walls, square corners, reverse, add a facade around it); for empty ground, **EDIT** (undo, redo, save); otherwise **CREATE**.
